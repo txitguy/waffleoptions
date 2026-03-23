@@ -101,7 +101,7 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 - **M+ Key Reminder:** Listens for `GROUP_JOINED`, uses `C_LFGList.GetActiveEntryInfo()` / `C_LFGList.GetSearchResultInfo()` + `C_LFGList.GetActivityInfoTable()` to get group's listed key. Delayed 1s for API data availability.
 - **Auto-Insert Keystone:** Listens for `CHALLENGE_MODE_KEYSTONE_RECEPTACLE_OPEN`, calls `C_ChallengeMode.SlotKeystone()` after 0.3s delay.
 - **End of Dungeon Message:** `CHALLENGE_MODE_COMPLETED` (M+) and `LFG_COMPLETION_REWARD` (regular). Sends customizable message to group chat via `GetGroupChatChannel()` with configurable delay via `C_Timer.After`.
-- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `C_ChallengeMode.IsChallengeModeActive()`. Shows current spec via `GetSpecializationInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional `RAID_WARNING` sound.
+- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `IsInMythicDungeon()` (mythic difficulty via `GetDifficultyInfo()` OR active challenge mode). Shows current spec via `GetSpecializationInfo()`. Optionally shows active loadout name via `C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional alert sound. Logic extracted into `RunSpecAndTalentCheck()` for reuse by `/waffletest`.
 - **Ready Check Buffs:** `READY_CHECK` event. Scans party classes via `UnitClass()`. Checks player for class buffs (Intellect 1459, Fortitude 21562, Battle Shout 6673, MotW 1126, Bronze 381748), food (Well Fed aura name match), flask (Phial/Flask aura name match) via `C_UnitAuras.GetBuffDataByIndex()`. Personal or group chat mode.
 - **Options (WafflemationsDB keys):**
   - `dungeonKeyReminder` (bool, default: true) — Show group key info on join
@@ -111,8 +111,13 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `dungeonGGDelay` (number, default: 0) — Delay in seconds
   - `dungeonGGMythicPlus` (bool, default: true) — Trigger on M+ completion
   - `dungeonGGRegular` (bool, default: true) — Trigger on regular dungeons
-  - `dungeonSpecReminder` (bool, default: true) — Spec/talent reminder in M+
+  - `dungeonSpecReminder` (bool, default: true) — Spec/talent reminder in dungeons
+  - `dungeonSpecShowLoadout` (bool, default: true) — Show active talent loadout name in spec reminder
+  - `dungeonSpecReminderChannel` (string, default: "print") — Channel for spec reminder
+  - `dungeonUnspentWarning` (bool, default: true) — Warn about unspent talent points
+  - `dungeonUnspentChannel` (string, default: "print") — Channel for unspent warning
   - `dungeonSpecReminderSound` (bool, default: true) — Alert sound for unspent talents
+  - `dungeonSpecReminderSoundID` (number, default: 37666) — Sound ID ("You are not prepared")
   - `dungeonReadyCheckBuffs` (bool, default: true) — Buff check on ready check
   - `dungeonBuffCheckMode` (string, default: "personal") — "personal" or "party"
   - `dungeonBuffCheckClassBuffs` (bool, default: true) — Check class buffs

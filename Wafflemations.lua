@@ -41,6 +41,7 @@ local defaults = {
     dungeonGGMythicPlus = true,
     dungeonGGRegular = true,
     dungeonSpecReminder = true,
+    dungeonSpecShowLoadout = true,
     dungeonSpecReminderChannel = "print",
     dungeonUnspentWarning = true,
     dungeonUnspentChannel = "print",
@@ -419,12 +420,12 @@ local function SendToChannel(channelSetting, msg)
         print(msg)
     elseif channelSetting == "emote" then
         -- Strip color codes for emote
-        local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+        local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|", "")
         SendChatMessage(clean, "EMOTE")
     elseif channelSetting == "group" then
         local channel = GetGroupChatChannel()
         if channel then
-            local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|", "")
             SendChatMessage(clean, channel)
         else
             print(msg)
@@ -433,18 +434,89 @@ local function SendToChannel(channelSetting, msg)
 end
 
 -- Dungeon: Spec/talent reminder
-local function HandleZoneChanged()
-    C_Timer.After(1, function()
-        if not C_ChallengeMode.IsChallengeModeActive() then return end
+local function IsInMythicDungeon()
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    if instanceType ~= "party" then return false end
+    -- Mythic (M0) = 23, Mythic Keystone (M+) = 8
+    return difficultyID == 23 or difficultyID == 8
+end
 
+local function RunSpecAndTalentCheck()
         -- Spec reminder
         if WafflemationsDB.dungeonSpecReminder then
             local specIndex = GetSpecialization()
             if specIndex then
                 local _, specName = GetSpecializationInfo(specIndex)
                 if specName then
-                    SendToChannel(WafflemationsDB.dungeonSpecReminderChannel,
-                        "|cff88cc88[Wafflemations]|r Current spec: |cffffffff" .. specName .. "|r")
+                    local msg = "|cff88cc88[Wafflemations]|r Current spec: |cffffffff" .. specName .. "|r"
+                    -- Show active loadout name
+                    if WafflemationsDB.dungeonSpecShowLoadout then
+                        local specID = GetSpecializationInfo(specIndex)
+                        local loadoutName = nil
+                        if specID then
+                            -- GetActiveConfigID returns the working copy (named after spec)
+                            -- GetConfigIDsBySpecID returns saved loadouts with user-given names
+                            -- We need to find which saved loadout is currently active
+                            local activeConfigID = C_ClassTalents.GetActiveConfigID()
+                            local savedIDs = C_ClassTalents.GetConfigIDsBySpecID(specID)
+                            if savedIDs then
+                                if #savedIDs == 1 then
+                                    -- Only one loadout — that's the active one
+                                    local ci = C_Traits.GetConfigInfo(savedIDs[1])
+                                    if ci and ci.name and ci.name ~= "" then
+                                        loadoutName = ci.name
+                                    end
+                                elseif #savedIDs > 1 and activeConfigID then
+                                    -- Multiple loadouts: compare node selections to find which matches
+                                    local activeInfo = C_Traits.GetConfigInfo(activeConfigID)
+                                    if activeInfo and activeInfo.treeIDs and activeInfo.treeIDs[1] then
+                                        local treeID = activeInfo.treeIDs[1]
+                                        local activeNodes = C_Traits.GetTreeNodes(treeID)
+                                        -- Build a fingerprint of active config's node selections
+                                        local activeSelections = {}
+                                        if activeNodes then
+                                            for _, nodeID in ipairs(activeNodes) do
+                                                local nodeInfo = C_Traits.GetNodeInfo(activeConfigID, nodeID)
+                                                if nodeInfo and nodeInfo.activeEntry then
+                                                    activeSelections[nodeID] = nodeInfo.activeEntry.entryID .. "-" .. nodeInfo.activeEntry.rank
+                                                end
+                                            end
+                                        end
+                                        -- Compare each saved config against active
+                                        local bestMatch, bestCount = nil, 0
+                                        for _, savedID in ipairs(savedIDs) do
+                                            local matchCount = 0
+                                            local total = 0
+                                            for nodeID, activeVal in pairs(activeSelections) do
+                                                total = total + 1
+                                                local savedNode = C_Traits.GetNodeInfo(savedID, nodeID)
+                                                if savedNode and savedNode.activeEntry then
+                                                    local savedVal = savedNode.activeEntry.entryID .. "-" .. savedNode.activeEntry.rank
+                                                    if savedVal == activeVal then
+                                                        matchCount = matchCount + 1
+                                                    end
+                                                end
+                                            end
+                                            if matchCount > bestCount then
+                                                bestCount = matchCount
+                                                bestMatch = savedID
+                                            end
+                                        end
+                                        if bestMatch then
+                                            local ci = C_Traits.GetConfigInfo(bestMatch)
+                                            if ci and ci.name and ci.name ~= "" then
+                                                loadoutName = ci.name
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        if loadoutName then
+                            msg = msg .. " - Loadout: |cff00ff00" .. loadoutName .. "|r"
+                        end
+                    end
+                    SendToChannel(WafflemationsDB.dungeonSpecReminderChannel, msg)
                 end
             end
         end
@@ -455,24 +527,35 @@ local function HandleZoneChanged()
             if configID then
                 local configInfo = C_Traits.GetConfigInfo(configID)
                 if configInfo then
+                    local totalUnspent = 0
                     for _, treeID in ipairs(configInfo.treeIDs) do
                         local treeCurrencyInfo = C_Traits.GetTreeCurrencyInfo(configID, treeID, false)
                         if treeCurrencyInfo then
                             for _, currency in ipairs(treeCurrencyInfo) do
-                                if currency.quantity and currency.quantity > 0 then
-                                    SendToChannel(WafflemationsDB.dungeonUnspentChannel,
-                                        "|cffff4444[Wafflemations] WARNING:|r You have " .. currency.quantity .. " unspent talent point(s)!")
-                                    if WafflemationsDB.dungeonUnspentSound then
-                                        PlaySound(WafflemationsDB.dungeonUnspentSoundID or 11466, "Master")
-                                    end
-                                    return
+                                -- Only count currencies where some points have been spent
+                                -- (filters out pool caps / sub-currencies with spent=0)
+                                if currency.quantity and currency.quantity > 0 and currency.spent and currency.spent > 0 then
+                                    totalUnspent = totalUnspent + currency.quantity
                                 end
                             end
+                        end
+                    end
+                    if totalUnspent > 0 then
+                        SendToChannel(WafflemationsDB.dungeonUnspentChannel,
+                            "|cffff4444[Wafflemations] WARNING:|r You have " .. totalUnspent .. " unspent talent point(s)!")
+                        if WafflemationsDB.dungeonUnspentSound then
+                            PlaySound(WafflemationsDB.dungeonUnspentSoundID or 11466, "Master")
                         end
                     end
                 end
             end
         end
+end
+
+local function HandleZoneChanged()
+    C_Timer.After(1, function()
+        if not IsInMythicDungeon() then return end
+        RunSpecAndTalentCheck()
     end)
 end
 
@@ -642,4 +725,11 @@ SlashCmdList["WAFFLEMATIONS"] = function()
     if Wafflemations.ToggleOptions then
         Wafflemations.ToggleOptions()
     end
+end
+
+-- Test command: triggers dungeon checks regardless of location
+SLASH_WAFFLETEST1 = "/waffletest"
+SlashCmdList["WAFFLETEST"] = function()
+    print("|cff88cc88[Wafflemations]|r Running dungeon checks (test mode)...")
+    RunSpecAndTalentCheck()
 end

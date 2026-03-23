@@ -999,7 +999,8 @@ dungeonContent:HookScript("OnShow", UpdateGGState)
 -- Spec Reminder section
 y = y - SEC_GAP * 2
 y = CreateSectionHeader(dungeonContent, "Spec Reminder", y)
-local _, y = CreateCheckbox(dungeonContent, "Remind current spec when entering M+", y, "dungeonSpecReminder")
+local _, y = CreateCheckbox(dungeonContent, "Remind current spec when entering a mythic dungeon", y, "dungeonSpecReminder")
+local _, y = CreateCheckbox(dungeonContent, "Show active talent loadout name", y, "dungeonSpecShowLoadout", SUB_PAD)
 y = y - SEC_GAP
 local _, y = CreateRadioGroup(dungeonContent, y, "Spec Reminder Channel", {
     { label = "Print (local chat only)", value = "print" },
@@ -1010,7 +1011,7 @@ local _, y = CreateRadioGroup(dungeonContent, y, "Spec Reminder Channel", {
 -- Unspent Talents Warning section
 y = y - SEC_GAP * 2
 y = CreateSectionHeader(dungeonContent, "Unspent Talents Warning", y)
-local unspentCB, y = CreateCheckbox(dungeonContent, "Warn about unspent talents when entering M+", y, "dungeonUnspentWarning")
+local unspentCB, y = CreateCheckbox(dungeonContent, "Warn about unspent talents when entering a mythic dungeon", y, "dungeonUnspentWarning")
 local unspentSoundCB, y = CreateCheckbox(dungeonContent, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
 local _, y = CreateSoundPicker(dungeonContent, y, "dungeonUnspentSoundID")
 y = y - SEC_GAP
