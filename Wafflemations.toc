@@ -1,0 +1,9 @@
+## Interface: 120001
+## Title: Wafflemations
+## Notes: Various gameplay automations for World of Warcraft.
+## Author: Waffle Taco
+## Version: 1.0.0
+## SavedVariables: WafflemationsDB
+
+Wafflemations.lua
+Options.lua
