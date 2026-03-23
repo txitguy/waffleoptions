@@ -1457,10 +1457,3 @@ SlashCmdList["WAFFLECANCEL"] = function()
     CancelAutoLeave()
 end
 
--- Test command: triggers dungeon checks regardless of location
-SLASH_WAFFLETEST1 = "/waffletest"
-SlashCmdList["WAFFLETEST"] = function()
-    print("|cff88cc88[WaffleOptions]|r Running dungeon checks (test mode)...")
-    RunSpecAndTalentCheck()
-end
-

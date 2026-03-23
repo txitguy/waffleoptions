@@ -1008,7 +1008,7 @@ aboutTitle:SetTextColor(unpack(C.accent))
 
 local aboutVer = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 aboutVer:SetPoint("TOP", aboutTitle, "BOTTOM", 0, -6)
-aboutVer:SetText("v1.0.0  |  Interface 12.0.1  |  by Waffle Taco")
+aboutVer:SetText("@project-version@  |  Interface 12.0.1  |  by Waffle Taco")
 aboutVer:SetTextColor(unpack(C.textDim))
 
 local aboutLogo = aboutContent:CreateTexture(nil, "ARTWORK")
@@ -1373,8 +1373,8 @@ do -- Keystones
 end
 
 do -- Completion Message
-    CreateCategoryButton("Completion Msg", "Dungeons & Raids")
-    local f = CreateContentFrame("Completion Msg", 520)
+    CreateCategoryButton("Completion", "Dungeons & Raids")
+    local f = CreateContentFrame("Completion", 520)
     local y = CreateSectionHeader(f, "Completion Message", -PAD)
     local ggCB, y = CreateCheckbox(f, "Send message on completion", y, "dungeonAutoGG")
     local ggM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
