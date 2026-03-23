@@ -84,22 +84,18 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `autoResChatRaid` (bool, default: true) — Enable chat in raid
   - `autoResChatInstance` (bool, default: true) — Enable chat in instance groups
 
-### Combat
-- Listens for `PLAYER_REGEN_DISABLED` event (fires when entering combat)
-- Closes the World Map (`WorldMapFrame:Hide()`) and/or bags (`CloseAllBags()`) on combat start
-- **Options (WafflemationsDB keys):**
-  - `combatHideMap` (bool, default: true) — Auto-hide World Map when entering combat
-  - `combatHideBags` (bool, default: true) — Auto-close bags when entering combat
-
 ### General
 - **Cutscene skipping:** Listens for `CINEMATIC_START` (in-engine) and `PLAY_MOVIE` (pre-rendered) events
   - `PLAY_MOVIE` uses `C_MovieInfo.GetMovieSeen(movieID)` to check if already watched; skips via `GameMovieFinished()`
   - `CINEMATIC_START` has no movie ID; uses a session-local `watchedMovies` table so in-engine cinematics play once per session then skip; skips via `CinematicFrame_CancelCinematic()`
 - **Talking Head:** Listens for `TALKINGHEAD_REQUESTED`, hides `TalkingHeadFrame` immediately
+- **Combat:** Listens for `PLAYER_REGEN_DISABLED` event (fires when entering combat). Closes the World Map (`WorldMapFrame:Hide()`) and/or bags (`CloseAllBags()`) on combat start
 - **Options (WafflemationsDB keys):**
   - `skipCutscenes` (bool, default: false) — Master toggle for auto-skipping cutscenes
   - `skipCutscenesOnlyWatched` (bool, default: true) — Only skip cutscenes that have been watched before
   - `hideTalkingHead` (bool, default: false) — Hide Talking Head popups
+  - `combatHideMap` (bool, default: true) — Auto-hide World Map when entering combat
+  - `combatHideBags` (bool, default: true) — Auto-close bags when entering combat
 
 ## Conventions
 
