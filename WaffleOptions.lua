@@ -252,7 +252,7 @@ local function CollectNextMail()
 
             mail.index = mail.index - 1
             if didSomething then
-                C_Timer.After(0.15, CollectNextMail)
+                C_Timer.After(0.5, CollectNextMail)
                 return
             end
         end
@@ -391,10 +391,16 @@ end
 -- Combat auto-hide
 local function HandleCombatStart()
     if WaffleOptionsDB.combatHideMap and WorldMapFrame and WorldMapFrame:IsShown() then
-        WorldMapFrame:Hide()
+        HideUIPanel(WorldMapFrame)
     end
     if WaffleOptionsDB.combatHideBags then
         CloseAllBags()
+    end
+    -- Close WaffleOptions panel in combat
+    local wof = _G["WaffleOptionsFrame"]
+    if wof and wof:IsShown() then
+        wof:Hide()
+        print("|cff88cc88[WaffleOptions]|r Options panel closed — cannot be open during combat.")
     end
 end
 
@@ -1203,20 +1209,21 @@ local function HandleLootBindConfirm(lootSlot)
     StaticPopup_Hide("LOOT_BIND_CONFIRM")
 end
 
--- Auto-Fill Delete Text (hook StaticPopup_Show)
+-- Auto-Fill Delete Text (hook popup OnShow)
 local function SetupAutoFillDelete()
-    hooksecurefunc("StaticPopup_Show", function(which)
-        if not WaffleOptionsDB.autoFillDelete then return end
-        if which == "DELETE_ITEM" or which == "DELETE_GOOD_ITEM" or which == "DELETE_QUEST_ITEM" then
-            local popup = StaticPopup_Visible(which)
-            if popup then
-                local dialog = _G[popup]
-                if dialog and dialog.editBox then
-                    dialog.editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
+    local popupTypes = { "DELETE_ITEM", "DELETE_GOOD_ITEM", "DELETE_QUEST_ITEM", "DELETE_GOOD_QUEST_ITEM" }
+    for _, which in ipairs(popupTypes) do
+        local info = StaticPopupDialogs[which]
+        if info then
+            local origOnShow = info.OnShow
+            info.OnShow = function(self, ...)
+                if origOnShow then origOnShow(self, ...) end
+                if WaffleOptionsDB.autoFillDelete and self.EditBox then
+                    self.EditBox:SetText(DELETE_ITEM_CONFIRM_STRING or "DELETE")
                 end
             end
         end
-    end)
+    end
 end
 
 -- Auto Role Check

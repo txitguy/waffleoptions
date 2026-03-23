@@ -78,7 +78,23 @@ optionsFrame:SetBackdrop(BACKDROP)
 optionsFrame:SetBackdropColor(unpack(C.bg))
 optionsFrame:SetBackdropBorderColor(0, 0, 0, 1)
 optionsFrame:Hide()
-tinsert(UISpecialFrames, "WaffleOptionsFrame")
+
+-- Enable keyboard on show, disable on hide to avoid eating Escape globally
+optionsFrame:EnableKeyboard(false)
+optionsFrame:SetScript("OnShow", function(self)
+    self:EnableKeyboard(true)
+end)
+optionsFrame:SetScript("OnHide", function(self)
+    self:EnableKeyboard(false)
+end)
+optionsFrame:SetScript("OnKeyDown", function(self, key)
+    if key == "ESCAPE" then
+        self:SetPropagateKeyboardInput(false)
+        self:Hide()
+    else
+        self:SetPropagateKeyboardInput(true)
+    end
+end)
 
 CreatePixelBorder(optionsFrame, unpack(C.border))
 
