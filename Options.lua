@@ -516,15 +516,25 @@ end
 -------------------------------------------------
 -- Helper: Sound picker (dropdown + play button)
 -------------------------------------------------
--- Build full sound list from SOUNDKIT, sorted alphabetically
+-- Curated alert sound list
 local ALERT_SOUNDS = {}
-for key, id in pairs(SOUNDKIT) do
-    if type(id) == "number" and type(key) == "string" then
-        -- Format: RAID_WARNING → Raid Warning
-        local label = key:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b:lower() end)
-        tinsert(ALERT_SOUNDS, { id = id, name = label, key = key })
+local function AddSound(key, label)
+    if SOUNDKIT[key] then
+        tinsert(ALERT_SOUNDS, { id = SOUNDKIT[key], name = label })
     end
 end
+AddSound("RAID_WARNING",           "Raid Warning")
+AddSound("READY_CHECK",            "Ready Check")
+AddSound("ALARM_CLOCK_WARNING_3",  "Alarm Clock")
+AddSound("PVP_THROUGH_QUEUE",      "Queue Ready")
+AddSound("MAP_PING",               "Map Ping")
+AddSound("LEVEL_UP",               "Level Up")
+AddSound("UI_EPICLOOT_TOAST",      "Epic Loot Toast")
+AddSound("UI_RAID_BOSS_WHISPER",   "Boss Whisper")
+AddSound("GM_CHAT_WARNING",        "GM Warning")
+AddSound("UI_70_BOOST_THANKSFORPLAYING_SMALLER", "Quest Complete Fanfare")
+-- "You are not prepared" (Illidan)
+tinsert(ALERT_SOUNDS, { id = 11466, name = "You Are Not Prepared" })
 table.sort(ALERT_SOUNDS, function(a, b) return a.name < b.name end)
 
 local function CreateSoundPicker(parent, y, dbKey)
@@ -566,66 +576,23 @@ local function CreateSoundPicker(parent, y, dbKey)
     playBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
     playBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(unpack(C.border)) end)
     playBtn:SetScript("OnClick", function()
-        PlaySound(WafflemationsDB[dbKey] or 8959, "Master")
+        PlaySound(WafflemationsDB[dbKey] or 11466, "Master")
     end)
 
-    -- Scrollable dropdown list
+    -- Simple dropdown list (no scroll needed for small lists)
     local LIST_ITEM_H = 22
-    local LIST_VISIBLE = 12
-    local LIST_H = LIST_VISIBLE * LIST_ITEM_H + 4
 
     local listFrame = CreateFrame("Frame", nil, dropBtn, "BackdropTemplate")
     listFrame:SetPoint("TOPLEFT", dropBtn, "BOTTOMLEFT", 0, -2)
-    listFrame:SetSize(300, LIST_H)
+    listFrame:SetSize(300, #ALERT_SOUNDS * LIST_ITEM_H + 4)
     listFrame:SetBackdrop(BACKDROP)
     listFrame:SetBackdropColor(0.04, 0.04, 0.04, 0.98)
     listFrame:SetBackdropBorderColor(unpack(C.border))
     listFrame:SetFrameStrata("TOOLTIP")
     listFrame:Hide()
 
-    -- Scroll frame inside list
-    local listScroll = CreateFrame("ScrollFrame", nil, listFrame)
-    listScroll:SetPoint("TOPLEFT", 2, -2)
-    listScroll:SetPoint("BOTTOMRIGHT", -9, 2)
-
-    local listChild = CreateFrame("Frame", nil, listScroll)
-    listChild:SetWidth(289)
-    listChild:SetHeight(#ALERT_SOUNDS * LIST_ITEM_H)
-    listScroll:SetScrollChild(listChild)
-
-    -- List scrollbar
-    local listBar = CreateFrame("Slider", nil, listFrame, "BackdropTemplate")
-    listBar:SetWidth(5)
-    listBar:SetPoint("TOPRIGHT", -2, -2)
-    listBar:SetPoint("BOTTOMRIGHT", -2, 2)
-    listBar:SetBackdrop(BACKDROP)
-    listBar:SetBackdropColor(0.03, 0.03, 0.03, 1)
-    listBar:SetBackdropBorderColor(unpack(C.border))
-    local maxListScroll = math.max(0, #ALERT_SOUNDS * LIST_ITEM_H - (LIST_H - 4))
-    listBar:SetMinMaxValues(0, maxListScroll)
-    listBar:SetValue(0)
-    listBar:SetValueStep(1)
-    listBar:SetObeyStepOnDrag(true)
-
-    local listThumb = listBar:CreateTexture(nil, "OVERLAY")
-    listThumb:SetColorTexture(unpack(C.accentDim))
-    local trackH = LIST_H - 4
-    local totalH = #ALERT_SOUNDS * LIST_ITEM_H
-    listThumb:SetSize(5, totalH > 0 and math.max(20, trackH * (trackH / totalH)) or 40)
-    listBar:SetThumbTexture(listThumb)
-
-    listBar:SetScript("OnValueChanged", function(_, val)
-        listScroll:SetVerticalScroll(val)
-    end)
-    listScroll:EnableMouseWheel(true)
-    listScroll:SetScript("OnMouseWheel", function(_, delta)
-        local cur = listBar:GetValue()
-        local lo, hi = listBar:GetMinMaxValues()
-        listBar:SetValue(math.max(lo, math.min(hi, cur - delta * LIST_ITEM_H * 3)))
-    end)
-
     local function UpdateDisplay()
-        local currentID = WafflemationsDB[dbKey] or 8959
+        local currentID = WafflemationsDB[dbKey] or 11466
         for _, s in ipairs(ALERT_SOUNDS) do
             if s.id == currentID then
                 dropText:SetText(s.name)
@@ -636,10 +603,10 @@ local function CreateSoundPicker(parent, y, dbKey)
     end
 
     for i, sound in ipairs(ALERT_SOUNDS) do
-        local item = CreateFrame("Button", nil, listChild)
+        local item = CreateFrame("Button", nil, listFrame)
         item:SetHeight(LIST_ITEM_H)
-        item:SetPoint("TOPLEFT", 0, -(i - 1) * LIST_ITEM_H)
-        item:SetPoint("RIGHT", listChild, "RIGHT", 0, 0)
+        item:SetPoint("TOPLEFT", 2, -(i - 1) * LIST_ITEM_H - 2)
+        item:SetPoint("RIGHT", listFrame, "RIGHT", -2, 0)
 
         local itemBg = item:CreateTexture(nil, "BACKGROUND")
         itemBg:SetAllPoints()
@@ -694,12 +661,7 @@ local function CreateSoundPicker(parent, y, dbKey)
     end
 
     dropBtn:SetScript("OnClick", function()
-        if listFrame:IsShown() then
-            listFrame:Hide()
-        else
-            listBar:SetValue(0)
-            listFrame:Show()
-        end
+        listFrame:SetShown(not listFrame:IsShown())
     end)
     dropBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
     dropBtn:SetScript("OnLeave", function(self)

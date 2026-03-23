@@ -45,7 +45,7 @@ local defaults = {
     dungeonUnspentWarning = true,
     dungeonUnspentChannel = "print",
     dungeonUnspentSound = true,
-    dungeonUnspentSoundID = 8959,  -- SOUNDKIT.RAID_WARNING
+    dungeonUnspentSoundID = 11466, -- "You are not prepared"
     dungeonReadyCheckBuffs = true,
     dungeonBuffCheckMode = "personal",
     dungeonBuffCheckClassBuffs = true,
@@ -463,7 +463,7 @@ local function HandleZoneChanged()
                                     SendToChannel(WafflemationsDB.dungeonUnspentChannel,
                                         "|cffff4444[Wafflemations] WARNING:|r You have " .. currency.quantity .. " unspent talent point(s)!")
                                     if WafflemationsDB.dungeonUnspentSound then
-                                        PlaySound(WafflemationsDB.dungeonUnspentSoundID or 8959, "Master")
+                                        PlaySound(WafflemationsDB.dungeonUnspentSoundID or 11466, "Master")
                                     end
                                     return
                                 end
