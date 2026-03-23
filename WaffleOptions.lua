@@ -1277,7 +1277,9 @@ local function HandleSpellcastSucceeded(unit, _, spellID)
         local interruptName = INTERRUPT_SPELLS[spellID]
         if interruptName then
             local msg = (WaffleOptionsDB.dungeonInterruptMsg or "Interrupted with {spell}!"):gsub("{spell}", interruptName)
-            SendToChannel(WaffleOptionsDB.dungeonInterruptChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
+            C_Timer.After(0, function()
+                SendToChannel(WaffleOptionsDB.dungeonInterruptChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
+            end)
         end
     end
 
@@ -1290,8 +1292,10 @@ local function HandleSpellcastSucceeded(unit, _, spellID)
     -- Combat res tracker
     if WaffleOptionsDB.dungeonCombatResTracker and COMBAT_RES_SPELLS[spellID] then
         local resName = COMBAT_RES_SPELLS[spellID]
-        SendToChannel(WaffleOptionsDB.dungeonCombatResChannel,
-            "|cff88cc88[WaffleOptions]|r " .. unitName .. " used " .. resName .. "!")
+        C_Timer.After(0, function()
+            SendToChannel(WaffleOptionsDB.dungeonCombatResChannel,
+                "|cff88cc88[WaffleOptions]|r " .. unitName .. " used " .. resName .. "!")
+        end)
     end
 
     -- Group utility announcements
@@ -1305,7 +1309,9 @@ local function HandleSpellcastSucceeded(unit, _, spellID)
     end
 
     if msg then
-        SendToChannel(WaffleOptionsDB.dungeonAnnounceChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
+        C_Timer.After(0, function()
+            SendToChannel(WaffleOptionsDB.dungeonAnnounceChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
+        end)
     end
 end
 
