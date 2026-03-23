@@ -137,7 +137,7 @@ contentBg:SetBackdropBorderColor(unpack(C.border))
 
 -- Author line pinned at bottom
 local authorText = contentBg:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-authorText:SetPoint("BOTTOMLEFT", PAD, 8)
+authorText:SetPoint("BOTTOMRIGHT", -PAD, 8)
 authorText:SetText("Created by |cff66cc66Waffle Taco|r")
 authorText:SetTextColor(unpack(C.textDim))
 
@@ -405,6 +405,7 @@ local function CreateCheckbox(parent, label, y, dbKey, indent)
         UpdateVisual()
     end)
 
+    btn:SetScript("OnShow", UpdateVisual)
     UpdateVisual()
     return btn, y - CB_H
 end
@@ -459,6 +460,7 @@ local function CreateRadioGroup(parent, y, label, options, dbKey)
             t:SetTextColor(unpack(C.text))
         end)
 
+        btn:SetScript("OnShow", UpdateAll)
         btn.optValue = opt.value
         buttons[i] = btn
     end
@@ -540,11 +542,10 @@ aboutDiv:SetColorTexture(unpack(C.borderLight))
 
 local features = {
     { "General",        "Cutscenes, Talking Head, Combat" },
-    { "Auto-Repair",    "Repairs gear at merchants" },
-    { "Auto-Sell",      "Sells gray items at vendors" },
-    { "Auto-Mail",      "Collects mail from your mailbox" },
-    { "Auto-Summon",    "Accepts summons automatically" },
-    { "Auto-Resurrect", "Accepts resurrections automatically" },
+    { "Repair & Sell",  "Auto-repair gear and sell gray items" },
+    { "Mail",           "Collects mail from your mailbox" },
+    { "Summon",         "Accepts summons automatically" },
+    { "Resurrect",      "Accepts resurrections automatically" },
 }
 local fy = -90
 for _, feat in ipairs(features) do
@@ -565,6 +566,109 @@ aboutHint:SetPoint("TOPLEFT", PAD + 10, fy - 10)
 aboutHint:SetText("Select a category on the left to configure.")
 aboutHint:SetTextColor(unpack(C.textDim))
 
+-- Reset confirmation overlay
+local confirmOverlay = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
+confirmOverlay:SetAllPoints()
+confirmOverlay:SetFrameLevel(optionsFrame:GetFrameLevel() + 20)
+confirmOverlay:SetBackdrop(BACKDROP)
+confirmOverlay:SetBackdropColor(0, 0, 0, 0.8)
+confirmOverlay:SetBackdropBorderColor(0, 0, 0, 0)
+confirmOverlay:EnableMouse(true)
+confirmOverlay:Hide()
+
+local confirmBox = CreateFrame("Frame", nil, confirmOverlay, "BackdropTemplate")
+confirmBox:SetSize(320, 130)
+confirmBox:SetPoint("CENTER", 0, 20)
+confirmBox:SetBackdrop(BACKDROP)
+confirmBox:SetBackdropColor(unpack(C.bg))
+confirmBox:SetBackdropBorderColor(unpack(C.border))
+CreatePixelBorder(confirmBox, unpack(C.border))
+
+local confirmTitle = confirmBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+confirmTitle:SetPoint("TOP", 0, -16)
+confirmTitle:SetText("Reset All Settings?")
+confirmTitle:SetTextColor(unpack(C.label))
+
+local confirmDesc = confirmBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+confirmDesc:SetPoint("TOP", confirmTitle, "BOTTOM", 0, -10)
+confirmDesc:SetText("This will reset all options to their defaults.\nThis cannot be undone.")
+confirmDesc:SetTextColor(unpack(C.text))
+confirmDesc:SetJustifyH("CENTER")
+
+local confirmYes = CreateFrame("Button", nil, confirmBox, "BackdropTemplate")
+confirmYes:SetSize(100, 26)
+confirmYes:SetPoint("BOTTOMRIGHT", confirmBox, "BOTTOM", -8, 16)
+confirmYes:SetBackdrop(BACKDROP)
+confirmYes:SetBackdropColor(0.5, 0.15, 0.15, 1)
+confirmYes:SetBackdropBorderColor(unpack(C.border))
+
+local confirmYesTxt = confirmYes:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+confirmYesTxt:SetPoint("CENTER")
+confirmYesTxt:SetText("Reset")
+confirmYesTxt:SetTextColor(1, 0.8, 0.8)
+
+confirmYes:SetScript("OnEnter", function(self)
+    self:SetBackdropColor(0.65, 0.2, 0.2, 1)
+    self:SetBackdropBorderColor(0.8, 0.3, 0.3, 1)
+end)
+confirmYes:SetScript("OnLeave", function(self)
+    self:SetBackdropColor(0.5, 0.15, 0.15, 1)
+    self:SetBackdropBorderColor(unpack(C.border))
+end)
+confirmYes:SetScript("OnClick", function()
+    for k, v in pairs(Wafflemations.defaults) do
+        WafflemationsDB[k] = v
+    end
+    confirmOverlay:Hide()
+    print("|cff88cc88[Wafflemations]|r All settings have been reset to defaults.")
+    ReloadUI()
+end)
+
+local confirmNo = CreateFrame("Button", nil, confirmBox, "BackdropTemplate")
+confirmNo:SetSize(100, 26)
+confirmNo:SetPoint("BOTTOMLEFT", confirmBox, "BOTTOM", 8, 16)
+confirmNo:SetBackdrop(BACKDROP)
+confirmNo:SetBackdropColor(0.1, 0.1, 0.1, 1)
+confirmNo:SetBackdropBorderColor(unpack(C.border))
+
+local confirmNoTxt = confirmNo:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+confirmNoTxt:SetPoint("CENTER")
+confirmNoTxt:SetText("Cancel")
+confirmNoTxt:SetTextColor(unpack(C.text))
+
+confirmNo:SetScript("OnEnter", function(self)
+    self:SetBackdropColor(0.15, 0.15, 0.15, 1)
+    self:SetBackdropBorderColor(unpack(C.accent))
+end)
+confirmNo:SetScript("OnLeave", function(self)
+    self:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    self:SetBackdropBorderColor(unpack(C.border))
+end)
+confirmNo:SetScript("OnClick", function() confirmOverlay:Hide() end)
+
+-- Reset button on About page
+local resetBtn = CreateFrame("Button", nil, aboutContent, "BackdropTemplate")
+resetBtn:SetSize(140, 28)
+resetBtn:SetPoint("BOTTOMRIGHT", -PAD, 10)
+resetBtn:SetBackdrop(BACKDROP)
+resetBtn:SetBackdropColor(0.12, 0.12, 0.12, 1)
+resetBtn:SetBackdropBorderColor(unpack(C.border))
+
+local resetTxt = resetBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+resetTxt:SetPoint("CENTER")
+resetTxt:SetText("Reset to Defaults")
+resetTxt:SetTextColor(unpack(C.text))
+
+resetBtn:SetScript("OnEnter", function(self)
+    self:SetBackdropBorderColor(unpack(C.closeHover))
+    resetTxt:SetTextColor(1, 0.8, 0.8)
+end)
+resetBtn:SetScript("OnLeave", function(self)
+    self:SetBackdropBorderColor(unpack(C.border))
+    resetTxt:SetTextColor(unpack(C.text))
+end)
+resetBtn:SetScript("OnClick", function() confirmOverlay:Show() end)
+
 -------------------------------------------------
 -- General
 -------------------------------------------------
@@ -579,7 +683,7 @@ local function UpdateOnlyWatchedState()
     onlyWatchedCB:SetDisabled(not WafflemationsDB.skipCutscenes)
 end
 skipCB.onChanged = UpdateOnlyWatchedState
-UpdateOnlyWatchedState()
+generalContent:HookScript("OnShow", UpdateOnlyWatchedState)
 CreateDescription(generalContent,
     "When 'only watched' is enabled, cutscenes play once then auto-skip on repeat viewings.",
     y - 4)
@@ -597,38 +701,45 @@ CreateDescription(generalContent,
     y - 4)
 
 -------------------------------------------------
--- Auto-Repair
+-- Repair & Sell
 -------------------------------------------------
-CreateCategoryButton("Auto-Repair", 3)
-local repairContent = CreateContentFrame("Auto-Repair", 220)
+CreateCategoryButton("Repair & Sell", 3)
+local repairSellContent = CreateContentFrame("Repair & Sell", 360)
 
-y = CreateSectionHeader(repairContent, "Auto-Repair", -PAD)
-local _, y = CreateCheckbox(repairContent, "Enable Auto-Repair", y, "autoRepairEnabled")
-local _, y = CreateCheckbox(repairContent, "Show repair cost in chat", y, "autoRepairChat")
+y = CreateSectionHeader(repairSellContent, "Auto-Repair", -PAD)
+local repairEnableCB, y = CreateCheckbox(repairSellContent, "Enable Auto-Repair", y, "autoRepairEnabled")
+local repairChatCB, y = CreateCheckbox(repairSellContent, "Show repair cost in chat", y, "autoRepairChat", SUB_PAD)
+
+local function UpdateRepairChatState()
+    repairChatCB:SetDisabled(not WafflemationsDB.autoRepairEnabled)
+end
+repairEnableCB.onChanged = UpdateRepairChatState
+repairSellContent:HookScript("OnShow", UpdateRepairChatState)
 
 y = y - SEC_GAP
-local _, y = CreateRadioGroup(repairContent, y, "Repair Mode", {
+local _, y = CreateRadioGroup(repairSellContent, y, "Repair Mode", {
     { label = "Guild first, then personal gold", value = "guild_first" },
     { label = "Personal gold only", value = "personal_only" },
 }, "autoRepairMode")
 
--------------------------------------------------
--- Auto-Sell
--------------------------------------------------
-CreateCategoryButton("Auto-Sell", 4)
-local sellContent = CreateContentFrame("Auto-Sell", 130)
+y = y - SEC_GAP * 2
+y = CreateSectionHeader(repairSellContent, "Auto-Sell", y)
+local sellEnableCB, y = CreateCheckbox(repairSellContent, "Enable Auto-Sell gray items", y, "autoSellEnabled")
+local sellChatCB = CreateCheckbox(repairSellContent, "Show sell total in chat", y, "autoSellChat", SUB_PAD)
 
-y = CreateSectionHeader(sellContent, "Auto-Sell", -PAD)
-local _, y = CreateCheckbox(sellContent, "Enable Auto-Sell gray items", y, "autoSellEnabled")
-CreateCheckbox(sellContent, "Show sell total in chat", y, "autoSellChat")
+local function UpdateSellChatState()
+    sellChatCB:SetDisabled(not WafflemationsDB.autoSellEnabled)
+end
+sellEnableCB.onChanged = UpdateSellChatState
+repairSellContent:HookScript("OnShow", UpdateSellChatState)
 
 -------------------------------------------------
--- Auto-Mail
+-- Mail
 -------------------------------------------------
-CreateCategoryButton("Auto-Mail", 5)
-local mailContent = CreateContentFrame("Auto-Mail", 220)
+CreateCategoryButton("Mail", 4)
+local mailContent = CreateContentFrame("Mail", 220)
 
-y = CreateSectionHeader(mailContent, "Auto-Mail", -PAD)
+y = CreateSectionHeader(mailContent, "Auto-Collect Mail", -PAD)
 local _, y = CreateCheckbox(mailContent, "Enable Auto-Collect mail", y, "autoMailEnabled")
 local _, y = CreateCheckbox(mailContent, "Show collected gold in chat", y, "autoMailChat")
 local _, y = CreateCheckbox(mailContent, "Auto-delete empty mail", y, "autoMailDeleteEmpty")
@@ -640,8 +751,8 @@ CreateDescription(mailContent,
 -------------------------------------------------
 -- Auto-Summon
 -------------------------------------------------
-CreateCategoryButton("Auto-Summon", 6)
-local summonContent = CreateContentFrame("Auto-Summon", 520)
+CreateCategoryButton("Summon", 5)
+local summonContent = CreateContentFrame("Summon", 520)
 
 y = CreateSectionHeader(summonContent, "Auto-Summon", -PAD)
 local summonEnabledCB, y = CreateCheckbox(summonContent, "Enable Auto-Accept summons", y, "autoSummonEnabled")
@@ -660,7 +771,7 @@ local function UpdateReceiveState()
     receiveChatCB:SetDisabled(WafflemationsDB.autoSummonEnabled)
 end
 summonEnabledCB.onChanged = UpdateReceiveState
-UpdateReceiveState()
+summonContent:HookScript("OnShow", UpdateReceiveState)
 
 y = y - SEC_GAP
 y = CreateSubHeader(summonContent, "Chat on Summon Accepted", y)
@@ -676,8 +787,8 @@ CreateCheckbox(summonContent, "Instance (LFG/LFR)", y, "autoSummonChatInstance")
 -------------------------------------------------
 -- Auto-Resurrect
 -------------------------------------------------
-CreateCategoryButton("Auto-Resurrect", 7)
-local resContent = CreateContentFrame("Auto-Resurrect", 420)
+CreateCategoryButton("Resurrect", 6)
+local resContent = CreateContentFrame("Resurrect", 420)
 
 y = CreateSectionHeader(resContent, "Auto-Resurrect", -PAD)
 local _, y = CreateCheckbox(resContent, "Auto-accept out-of-combat resurrections", y, "autoResOOCEnabled")

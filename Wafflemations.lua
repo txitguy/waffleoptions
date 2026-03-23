@@ -35,6 +35,8 @@ local defaults = {
     hideTalkingHead = false,
 }
 
+Wafflemations.defaults = defaults
+
 -- Initialize saved variables with defaults (called immediately so Options.lua can read DB)
 local function InitDB()
     if not WafflemationsDB then
