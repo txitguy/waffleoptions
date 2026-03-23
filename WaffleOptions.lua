@@ -686,25 +686,19 @@ local FEAST_SPELLS = {
     [359336] = true, -- Empty Kettle of Stone Soup
 }
 
-local function HandleCombatLogGroupUtility()
-    local _, subEvent, _, _, sourceName, sourceFlags = CombatLogGetCurrentEventInfo()
-    if subEvent ~= "SPELL_CREATE" then return end
-    if not sourceName then return end
+local function HandleGroupUtilitySpellcast(unit, _, spellID)
     if not IsInGroup() then return end
+    if not UnitIsPlayer(unit) then return end
 
-    -- Check source is a group member (friendly + in raid/party)
-    local inGroup = bit.band(sourceFlags, COMBATLOG_OBJECT_AFFILIATION_MINE + COMBATLOG_OBJECT_AFFILIATION_PARTY + COMBATLOG_OBJECT_AFFILIATION_RAID) > 0
-    if not inGroup then return end
-
-    local spellID = select(12, CombatLogGetCurrentEventInfo())
     local msg
+    local unitName = UnitName(unit)
 
     if spellID == MAGE_TABLE_SPELL and WaffleOptionsDB.dungeonAnnounceMageTable then
-        msg = sourceName .. " placed a Mage Table!"
+        msg = unitName .. " placed a Mage Table!"
     elseif spellID == WARLOCK_SUMMON_SPELL and WaffleOptionsDB.dungeonAnnounceWarlock then
-        msg = sourceName .. " placed a Summoning Stone!"
+        msg = unitName .. " placed a Summoning Stone!"
     elseif FEAST_SPELLS[spellID] and WaffleOptionsDB.dungeonAnnounceFeast then
-        msg = sourceName .. " placed a feast!"
+        msg = unitName .. " placed a feast!"
     end
 
     if msg then
@@ -729,8 +723,8 @@ frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
 frame:RegisterEvent("LFG_COMPLETION_REWARD")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("READY_CHECK")
-frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-frame:SetScript("OnEvent", function(self, event, arg1)
+frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     if event == "ADDON_LOADED" then
         if arg1 == addonName then
             InitDB()
@@ -768,8 +762,8 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         HandleZoneChanged()
     elseif event == "READY_CHECK" then
         HandleReadyCheck()
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        HandleCombatLogGroupUtility()
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        HandleGroupUtilitySpellcast(arg1, arg2, arg3)
     end
 end)
 

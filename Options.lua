@@ -204,12 +204,14 @@ scrollFrame:SetScript("OnSizeChanged", function(self)
 end)
 
 -------------------------------------------------
--- Category System
+-- Category System (collapsible sections)
 -------------------------------------------------
 local categories = {}
 local contentFrames = {}
 local selectedCategory = nil
-local sidebarDividerY = nil -- set after About button
+local sidebarItems = {}      -- ordered list: {type, name, frame, section, visible}
+local sectionStates = {}     -- section name -> expanded bool
+local sidebarDividers = {}   -- divider textures to reposition
 
 local function SelectCategory(name)
     if selectedCategory == name then return end
@@ -229,11 +231,84 @@ local function SelectCategory(name)
     scrollBar:SetValue(0)
 end
 
-local function CreateCategoryButton(name, index)
+local function LayoutSidebar()
+    local y = -6
+    for _, item in ipairs(sidebarItems) do
+        if item.type == "divider" then
+            item.frame:ClearAllPoints()
+            item.frame:SetPoint("TOPLEFT", 10, y + 2)
+            y = y - 8
+        elseif item.type == "header" then
+            item.frame:ClearAllPoints()
+            item.frame:SetPoint("TOPLEFT", 5, y)
+            item.frame:SetPoint("RIGHT", sidebar, "RIGHT", -5, 0)
+            item.frame:Show()
+            y = y - SIDEBAR_PITCH
+        elseif item.type == "item" then
+            local expanded = item.section == nil or sectionStates[item.section]
+            if expanded then
+                item.frame:ClearAllPoints()
+                item.frame:SetPoint("TOPLEFT", 5, y)
+                item.frame:SetPoint("RIGHT", sidebar, "RIGHT", -5, 0)
+                item.frame:Show()
+                y = y - SIDEBAR_PITCH
+            else
+                item.frame:Hide()
+            end
+        end
+    end
+end
+
+local function ToggleSection(sectionName)
+    sectionStates[sectionName] = not sectionStates[sectionName]
+    -- Update arrow on header
+    for _, item in ipairs(sidebarItems) do
+        if item.type == "header" and item.name == sectionName then
+            item.arrow:SetText(sectionStates[sectionName] and "v" or ">")
+            break
+        end
+    end
+    LayoutSidebar()
+end
+
+local function CreateSidebarSection(name)
+    sectionStates[name] = true -- expanded by default
+
     local btn = CreateFrame("Button", nil, sidebar)
     btn:SetHeight(28)
-    btn:SetPoint("TOPLEFT", 5, -6 - (index - 1) * SIDEBAR_PITCH)
-    btn:SetPoint("RIGHT", sidebar, "RIGHT", -5, 0)
+
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0)
+    btn.bg = bg
+
+    local arrow = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    arrow:SetPoint("LEFT", 8, 0)
+    arrow:SetText("v")
+    arrow:SetTextColor(unpack(C.textDim))
+
+    local lbl = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lbl:SetPoint("LEFT", 20, 0)
+    lbl:SetText(name)
+    lbl:SetTextColor(unpack(C.label))
+
+    btn:SetScript("OnClick", function() ToggleSection(name) end)
+    btn:SetScript("OnEnter", function()
+        bg:SetColorTexture(unpack(C.catHover))
+        lbl:SetTextColor(unpack(C.textBright))
+    end)
+    btn:SetScript("OnLeave", function()
+        bg:SetColorTexture(0, 0, 0, 0)
+        lbl:SetTextColor(unpack(C.label))
+    end)
+
+    tinsert(sidebarItems, { type = "header", name = name, frame = btn, arrow = arrow })
+    return btn
+end
+
+local function CreateCategoryButton(name, section)
+    local btn = CreateFrame("Button", nil, sidebar)
+    btn:SetHeight(28)
 
     local bg = btn:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
@@ -248,8 +323,9 @@ local function CreateCategoryButton(name, index)
     stripe:Hide()
     btn.stripe = stripe
 
+    local indent = section and 20 or 12
     local lbl = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lbl:SetPoint("LEFT", 12, 0)
+    lbl:SetPoint("LEFT", indent, 0)
     lbl:SetText(name)
     lbl:SetTextColor(unpack(C.text))
     btn.label = lbl
@@ -263,16 +339,16 @@ local function CreateCategoryButton(name, index)
     end)
 
     categories[name] = btn
+    tinsert(sidebarItems, { type = "item", name = name, frame = btn, section = section })
     return btn
 end
 
-local function CreateSidebarDivider(afterIndex)
-    local y = -6 - afterIndex * SIDEBAR_PITCH + 2
+local function CreateSidebarDivider()
     local line = sidebar:CreateTexture(nil, "ARTWORK")
     line:SetHeight(1)
-    line:SetPoint("TOPLEFT", 10, y)
     line:SetPoint("RIGHT", sidebar, "RIGHT", -10, 0)
     line:SetColorTexture(unpack(C.borderLight))
+    tinsert(sidebarItems, { type = "divider", frame = line })
 end
 
 local function CreateContentFrame(name, height)
@@ -682,8 +758,8 @@ end
 -------------------------------------------------
 -- About
 -------------------------------------------------
-CreateCategoryButton("About", 1)
-CreateSidebarDivider(1) -- line after About
+CreateCategoryButton("About", nil)
+CreateSidebarDivider()
 local aboutContent = CreateContentFrame("About", 320)
 
 local aboutTitle = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
@@ -708,7 +784,8 @@ local features = {
     { "Mail",           "Collects mail from your mailbox" },
     { "Summon",         "Accepts summons automatically" },
     { "Resurrect",      "Accepts resurrections automatically" },
-    { "Dungeon",        "M+ keys, end-of-dungeon, buff checks" },
+    { "Dungeons",       "Keystones, spec reminders, buff checks" },
+    { "Announcements",  "End-of-dungeon, group utility alerts" },
 }
 local fy = -90
 for _, feat in ipairs(features) do
@@ -833,9 +910,10 @@ end)
 resetBtn:SetScript("OnClick", function() confirmOverlay:Show() end)
 
 -------------------------------------------------
--- General
+-- General Section
 -------------------------------------------------
-CreateCategoryButton("General", 2)
+CreateSidebarSection("General")
+CreateCategoryButton("General", "General")
 local generalContent = CreateContentFrame("General", 340)
 
 local y = CreateSectionHeader(generalContent, "Cutscenes", -PAD)
@@ -866,7 +944,7 @@ CreateDescription(generalContent,
 -------------------------------------------------
 -- Repair & Sell
 -------------------------------------------------
-CreateCategoryButton("Repair & Sell", 3)
+CreateCategoryButton("Repair & Sell", "General")
 local repairSellContent = CreateContentFrame("Repair & Sell", 360)
 
 y = CreateSectionHeader(repairSellContent, "Auto-Repair", -PAD)
@@ -899,7 +977,7 @@ repairSellContent:HookScript("OnShow", UpdateSellChatState)
 -------------------------------------------------
 -- Mail
 -------------------------------------------------
-CreateCategoryButton("Mail", 4)
+CreateCategoryButton("Mail", "General")
 local mailContent = CreateContentFrame("Mail", 220)
 
 y = CreateSectionHeader(mailContent, "Auto-Collect Mail", -PAD)
@@ -914,7 +992,7 @@ CreateDescription(mailContent,
 -------------------------------------------------
 -- Auto-Summon
 -------------------------------------------------
-CreateCategoryButton("Summon", 5)
+CreateCategoryButton("Summon", "General")
 local summonContent = CreateContentFrame("Summon", 520)
 
 y = CreateSectionHeader(summonContent, "Auto-Summon", -PAD)
@@ -950,7 +1028,7 @@ CreateCheckbox(summonContent, "Instance (LFG/LFR)", y, "autoSummonChatInstance")
 -------------------------------------------------
 -- Auto-Resurrect
 -------------------------------------------------
-CreateCategoryButton("Resurrect", 6)
+CreateCategoryButton("Resurrect", "General")
 local resContent = CreateContentFrame("Resurrect", 420)
 
 y = CreateSectionHeader(resContent, "Auto-Resurrect", -PAD)
@@ -969,24 +1047,28 @@ local _, y = CreateCheckbox(resContent, "Raid", y, "autoResChatRaid")
 CreateCheckbox(resContent, "Instance (LFG/LFR)", y, "autoResChatInstance")
 
 -------------------------------------------------
--- Dungeon
+-- Dungeons & Raids Section
 -------------------------------------------------
-CreateCategoryButton("Dungeon", 7)
-local dungeonContent = CreateContentFrame("Dungeon", 1300)
+CreateSidebarSection("Dungeons & Raids")
 
--- Keystone section
-y = CreateSectionHeader(dungeonContent, "Keystone", -PAD)
-local _, y = CreateCheckbox(dungeonContent, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
-local _, y = CreateCheckbox(dungeonContent, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
+-- Keystones sub-page
+CreateCategoryButton("Keystones", "Dungeons & Raids")
+local keystoneContent = CreateContentFrame("Keystones", 200)
 
--- End of Dungeon section
-y = y - SEC_GAP * 2
-y = CreateSectionHeader(dungeonContent, "End of Dungeon", y)
-local ggEnableCB, y = CreateCheckbox(dungeonContent, "Send message at end of dungeon", y, "dungeonAutoGG")
-local ggMythicCB, y = CreateCheckbox(dungeonContent, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
-local ggRegularCB, y = CreateCheckbox(dungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
-local ggMsgInput, y = CreateTextInput(dungeonContent, "Message", y - 4, 390, "dungeonGGMessage")
-local ggDelayInput, y = CreateTextInput(dungeonContent, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
+y = CreateSectionHeader(keystoneContent, "Keystone", -PAD)
+local _, y = CreateCheckbox(keystoneContent, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
+CreateCheckbox(keystoneContent, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
+
+-- End of Dungeon sub-page
+CreateCategoryButton("End of Dungeon", "Dungeons & Raids")
+local endDungeonContent = CreateContentFrame("End of Dungeon", 300)
+
+y = CreateSectionHeader(endDungeonContent, "End of Dungeon Message", -PAD)
+local ggEnableCB, y = CreateCheckbox(endDungeonContent, "Send message at end of dungeon", y, "dungeonAutoGG")
+local ggMythicCB, y = CreateCheckbox(endDungeonContent, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
+local ggRegularCB, y = CreateCheckbox(endDungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
+local ggMsgInput, y = CreateTextInput(endDungeonContent, "Message", y - 4, 390, "dungeonGGMessage")
+CreateTextInput(endDungeonContent, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
 
 local function UpdateGGState()
     local off = not WaffleOptionsDB.dungeonAutoGG
@@ -994,28 +1076,29 @@ local function UpdateGGState()
     ggRegularCB:SetDisabled(off)
 end
 ggEnableCB.onChanged = UpdateGGState
-dungeonContent:HookScript("OnShow", UpdateGGState)
+endDungeonContent:HookScript("OnShow", UpdateGGState)
 
--- Spec Reminder section
-y = y - SEC_GAP * 2
-y = CreateSectionHeader(dungeonContent, "Spec Reminder", y)
-local _, y = CreateCheckbox(dungeonContent, "Remind current spec when entering a mythic dungeon", y, "dungeonSpecReminder")
-local _, y = CreateCheckbox(dungeonContent, "Show active talent loadout name", y, "dungeonSpecShowLoadout", SUB_PAD)
+-- Spec & Talents sub-page
+CreateCategoryButton("Spec & Talents", "Dungeons & Raids")
+local specTalentsContent = CreateContentFrame("Spec & Talents", 500)
+
+y = CreateSectionHeader(specTalentsContent, "Spec Reminder", -PAD)
+local _, y = CreateCheckbox(specTalentsContent, "Remind current spec when entering a mythic dungeon", y, "dungeonSpecReminder")
+local _, y = CreateCheckbox(specTalentsContent, "Show active talent loadout name", y, "dungeonSpecShowLoadout", SUB_PAD)
 y = y - SEC_GAP
-local _, y = CreateRadioGroup(dungeonContent, y, "Spec Reminder Channel", {
+local _, y = CreateRadioGroup(specTalentsContent, y, "Spec Reminder Channel", {
     { label = "Print (local chat only)", value = "print" },
     { label = "Emote", value = "emote" },
     { label = "Party / Raid / Instance", value = "group" },
 }, "dungeonSpecReminderChannel")
 
--- Unspent Talents Warning section
 y = y - SEC_GAP * 2
-y = CreateSectionHeader(dungeonContent, "Unspent Talents Warning", y)
-local unspentCB, y = CreateCheckbox(dungeonContent, "Warn about unspent talents when entering a mythic dungeon", y, "dungeonUnspentWarning")
-local unspentSoundCB, y = CreateCheckbox(dungeonContent, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
-local _, y = CreateSoundPicker(dungeonContent, y, "dungeonUnspentSoundID")
+y = CreateSectionHeader(specTalentsContent, "Unspent Talents Warning", y)
+local unspentCB, y = CreateCheckbox(specTalentsContent, "Warn about unspent talents when entering a mythic dungeon", y, "dungeonUnspentWarning")
+local unspentSoundCB, y = CreateCheckbox(specTalentsContent, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
+local _, y = CreateSoundPicker(specTalentsContent, y, "dungeonUnspentSoundID")
 y = y - SEC_GAP
-local _, y = CreateRadioGroup(dungeonContent, y, "Warning Channel", {
+CreateRadioGroup(specTalentsContent, y, "Warning Channel", {
     { label = "Print (local chat only)", value = "print" },
     { label = "Emote", value = "emote" },
     { label = "Party / Raid / Instance", value = "group" },
@@ -1025,24 +1108,26 @@ local function UpdateUnspentSoundState()
     unspentSoundCB:SetDisabled(not WaffleOptionsDB.dungeonUnspentWarning)
 end
 unspentCB.onChanged = UpdateUnspentSoundState
-dungeonContent:HookScript("OnShow", UpdateUnspentSoundState)
+specTalentsContent:HookScript("OnShow", UpdateUnspentSoundState)
 
--- Ready Check Buffs section
-y = y - SEC_GAP * 2
-y = CreateSectionHeader(dungeonContent, "Ready Check Buffs", y)
-local buffCheckCB, y = CreateCheckbox(dungeonContent, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
+-- Ready Check sub-page
+CreateCategoryButton("Ready Check", "Dungeons & Raids")
+local readyCheckContent = CreateContentFrame("Ready Check", 350)
+
+y = CreateSectionHeader(readyCheckContent, "Ready Check Buffs", -PAD)
+local buffCheckCB, y = CreateCheckbox(readyCheckContent, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
 
 y = y - SEC_GAP
-local _, y = CreateRadioGroup(dungeonContent, y, "Announcement Mode", {
+local _, y = CreateRadioGroup(readyCheckContent, y, "Announcement Mode", {
     { label = "Personal (local chat only)", value = "personal" },
     { label = "Announce to group chat", value = "party" },
 }, "dungeonBuffCheckMode")
 
 y = y - SEC_GAP
-y = CreateSubHeader(dungeonContent, "Buffs to Check", y)
-local buffClassCB, y = CreateCheckbox(dungeonContent, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
-local buffFoodCB, y = CreateCheckbox(dungeonContent, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)
-local buffFlaskCB, y = CreateCheckbox(dungeonContent, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
+y = CreateSubHeader(readyCheckContent, "Buffs to Check", y)
+local buffClassCB, y = CreateCheckbox(readyCheckContent, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
+local buffFoodCB, y = CreateCheckbox(readyCheckContent, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)
+local buffFlaskCB = CreateCheckbox(readyCheckContent, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
 
 local function UpdateBuffCheckState()
     local off = not WaffleOptionsDB.dungeonReadyCheckBuffs
@@ -1051,16 +1136,18 @@ local function UpdateBuffCheckState()
     buffFlaskCB:SetDisabled(off)
 end
 buffCheckCB.onChanged = UpdateBuffCheckState
-dungeonContent:HookScript("OnShow", UpdateBuffCheckState)
+readyCheckContent:HookScript("OnShow", UpdateBuffCheckState)
 
--- Group Announcements section
-y = y - SEC_GAP * 2
-y = CreateSectionHeader(dungeonContent, "Group Announcements", y)
-local _, y = CreateCheckbox(dungeonContent, "Announce Mage Table", y, "dungeonAnnounceMageTable")
-local _, y = CreateCheckbox(dungeonContent, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
-local _, y = CreateCheckbox(dungeonContent, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
+-- Announcements sub-page
+CreateCategoryButton("Announcements", "Dungeons & Raids")
+local announceContent = CreateContentFrame("Announcements", 300)
+
+y = CreateSectionHeader(announceContent, "Group Announcements", -PAD)
+local _, y = CreateCheckbox(announceContent, "Announce Mage Table", y, "dungeonAnnounceMageTable")
+local _, y = CreateCheckbox(announceContent, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
+local _, y = CreateCheckbox(announceContent, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
 y = y - SEC_GAP
-local _, y = CreateRadioGroup(dungeonContent, y, "Announcement Channel", {
+CreateRadioGroup(announceContent, y, "Announcement Channel", {
     { label = "Print (local chat only)", value = "print" },
     { label = "Emote", value = "emote" },
     { label = "Party / Raid / Instance", value = "group" },
@@ -1069,6 +1156,7 @@ local _, y = CreateRadioGroup(dungeonContent, y, "Announcement Channel", {
 -------------------------------------------------
 -- Default selection
 -------------------------------------------------
+LayoutSidebar()
 SelectCategory("About")
 
 -------------------------------------------------

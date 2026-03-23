@@ -21,9 +21,12 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 
 - Opened with `/waffle` slash command
 - Custom frame with dark theme, green accents, draggable, closes with Escape
-- Left sidebar has category buttons; right side shows settings for the selected category
+- Left sidebar has collapsible section headers with category sub-items; right side shows settings for the selected category
+- Sidebar uses dynamic layout: `sidebarItems` ordered list + `LayoutSidebar()` repositions all items when sections collapse/expand
+- `CreateSidebarSection(name)` creates a collapsible header; `CreateCategoryButton(name, section)` creates a category item under a section (or top-level if section is nil)
+- Sections: "General" (General, Repair & Sell, Mail, Summon, Resurrect) and "Dungeons & Raids" (Keystones, End of Dungeon, Spec & Talents, Ready Check, Announcements)
 - Helper functions `CreateCheckbox`, `CreateRadioGroup`, and `CreateTextInput` are used to build settings UI tied to `WaffleOptionsDB` keys
-- When adding a new category: use `CreateCategoryButton(name, index)` and `CreateContentFrame(name)`, then populate the content frame with controls
+- When adding a new category: use `CreateCategoryButton(name, section)` and `CreateContentFrame(name)`, then populate the content frame with controls
 
 ## Features & Options
 
@@ -97,7 +100,7 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `combatHideMap` (bool, default: true) — Auto-hide World Map when entering combat
   - `combatHideBags` (bool, default: true) — Auto-close bags when entering combat
 
-### Dungeon
+### Dungeon (split across 5 sub-pages: Keystones, End of Dungeon, Spec & Talents, Ready Check, Announcements)
 - **M+ Key Reminder:** Listens for `GROUP_JOINED`, uses `C_LFGList.GetActiveEntryInfo()` / `C_LFGList.GetSearchResultInfo()` + `C_LFGList.GetActivityInfoTable()` to get group's listed key. Delayed 1s for API data availability.
 - **Auto-Insert Keystone:** Listens for `CHALLENGE_MODE_KEYSTONE_RECEPTACLE_OPEN`, calls `C_ChallengeMode.SlotKeystone()` after 0.3s delay.
 - **End of Dungeon Message:** `CHALLENGE_MODE_COMPLETED` (M+) and `LFG_COMPLETION_REWARD` (regular). Sends customizable message to group chat via `GetGroupChatChannel()` with configurable delay via `C_Timer.After`.
@@ -128,6 +131,45 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `dungeonAnnounceWarlock` (bool, default: true) — Announce Warlock Summoning Stone placement
   - `dungeonAnnounceFeast` (bool, default: true) — Announce feast/buffet placement
   - `dungeonAnnounceChannel` (string, default: "group") — Channel for group announcements
+
+## WoW 12.0 API Restrictions
+
+WoW 12.0 (The War Within / Midnight) introduced major addon security changes. Be aware of these when developing features.
+
+### DO NOT USE — Protected/Restricted
+These will trigger `ADDON_ACTION_FORBIDDEN` errors:
+- **`COMBAT_LOG_EVENT_UNFILTERED`** — Cannot register this event. Use `UNIT_SPELLCAST_SUCCEEDED` for spell detection instead
+- **`CombatLogGetCurrentEventInfo()`** — Unavailable to addon code
+- **`C_SummonInfo.ConfirmSummon()`** — Marked as PROTECTED (auto-summon may not work in all contexts)
+- **`AcceptResurrect()`** — May be protected (auto-resurrect may not work in all contexts)
+- **Player action functions** — `JumpOrAscendStart()`, `MoveForwardStart()`, `FollowUnit()`, `TargetUnit()`, `CastSpell()`, `AttackTarget()`
+- **Binding/macro functions** — `SetBinding()`, `SetBindingSpell()`, `CreateMacro()`, `EditMacro()`
+- **Inventory functions** — `PickupInventoryItem()`, `DeleteCursorItem()`
+
+### Restriction Tiers
+- **Protected** — Always forbidden, fires `ADDON_ACTION_FORBIDDEN`
+- **Hardware Event (hwevent)** — Requires user click, fires `ADDON_ACTION_BLOCKED`
+- **No Combat (nocombat)** — Blocked during combat, fires `ADDON_ACTION_BLOCKED`
+- **Secure Frame** — Cannot call on secure frames in combat
+
+### Secret Values System (Instance Content)
+In boss encounters, M+ runs, and instance content:
+- Creature unit names, GUIDs, and IDs become "secret" (hidden from addons)
+- Access to auras, cooldowns, spell casts, unit identity, and power information may be restricted
+- Combat log data is restricted; alternatives: `C_DamageMeter`, `UnitThreatSituation`, `C_LossOfControl`, `C_CombatText`
+
+### Potentially Risky APIs Used by This Addon
+- `WorldMapFrame:Hide()` — Can spread taint, subject to secure frame restrictions in combat
+- `CloseAllBags()` — May have combat restrictions in certain contexts
+- `CinematicFrame_CancelCinematic()` — May have changed; `CinematicFinished(1)` may be needed in newer patches
+- `GameMovieFinished()` — May be nil in newer patches
+- `tinsert(UISpecialFrames, ...)` — Can cause taint propagation; used in Options.lua for Escape-to-close
+
+### Safe APIs
+- Standard event registration (`RegisterEvent()`) works for non-protected events
+- `UNIT_SPELLCAST_SUCCEEDED`, `MERCHANT_SHOW`, `MAIL_SHOW`, `CONFIRM_SUMMON`, `RESURRECT_REQUEST`, `CHALLENGE_MODE_COMPLETED`, `LFG_COMPLETION_REWARD`, `CINEMATIC_START`, `PLAY_MOVIE`, `PLAYER_REGEN_DISABLED`, `READY_CHECK`, `ZONE_CHANGED_NEW_AREA`, `GROUP_JOINED` — All safe to register
+- `SendChatMessage()` — Works from addon event handlers (not from `/run`)
+- `C_Container.*`, `C_Item.*`, `C_ChallengeMode.*`, `C_ClassTalents.*`, `C_Traits.*` — Standard namespace APIs
 
 ## Conventions
 
