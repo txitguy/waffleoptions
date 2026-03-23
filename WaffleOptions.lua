@@ -59,6 +59,63 @@ local defaults = {
     dungeonAnnounceWarlock = true,
     dungeonAnnounceFeast = true,
     dungeonAnnounceChannel = "group",
+    -- Auto-Accept Party Invites
+    autoPartyEnabled = false,
+    autoPartyFriends = true,
+    autoPartyGuild = true,
+    -- Party Greetings
+    partyGreetOnJoin = false,
+    partyGreetOnJoinMessages = { "Hey everyone!", "Hello!", "Hi all!", "Howdy!" },
+    partyGreetOnMemberJoin = false,
+    partyGreetOnMemberJoinMessages = { "Welcome {player}!", "Hey {player}!", "Hello {player}!" },
+    -- Auto-Release Spirit
+    autoReleaseEnabled = false,
+    autoReleaseDelay = 2,
+    -- Auto-Quest
+    autoQuestAccept = false,
+    autoQuestComplete = false,
+    autoQuestRepeatables = true,
+    -- Gossip Skip
+    autoGossipSkip = false,
+    -- Auto-Screenshot
+    autoScreenshotEnabled = false,
+    autoScreenshotAchievement = true,
+    autoScreenshotBossKill = true,
+    autoScreenshotLevelUp = true,
+    autoScreenshotDelay = 1,
+    autoScreenshotChat = true,
+    -- Achievement Congratulations
+    achieveGratsParty = false,
+    achieveGratsGuild = false,
+    achieveGratsMessages = { "Grats {player}!", "Congrats {player}!", "Nice one {player}!", "Well done {player}!" },
+    -- Auto-Confirm Loot
+    autoConfirmLoot = false,
+    -- Auto-Fill Delete
+    autoFillDelete = false,
+    -- Auto Role Check
+    autoRoleCheck = false,
+    -- Auto-Leave Instance
+    autoLeaveEnabled = false,
+    autoLeaveDelay = 15,
+    autoLeaveMythicPlus = false,
+    autoLeaveRegular = true,
+    -- Key Result
+    dungeonKeyResult = true,
+    dungeonKeyResultChannel = "print",
+    dungeonKeyResultSound = true,
+    dungeonKeyResultSoundID = 11466,
+    -- Combat Res Tracker
+    dungeonCombatResTracker = false,
+    dungeonCombatResChannel = "print",
+    -- Interrupt Announcements
+    dungeonInterruptAnnounce = false,
+    dungeonInterruptMsg = "Interrupted with {spell}!",
+    dungeonInterruptChannel = "group",
+    -- Loot Spec Warning
+    dungeonLootSpecWarning = true,
+    dungeonLootSpecSound = false,
+    dungeonLootSpecSoundID = 11466,
+    dungeonLootSpecChannel = "print",
 }
 
 WaffleOptions.defaults = defaults
@@ -202,19 +259,36 @@ local function CollectNextMail()
     end
 end
 
+local mailWaitingForData = false
+
 local function StartMailCollection()
     if not WaffleOptionsDB.autoMailEnabled then return end
     if mail.processing then return end
 
     local numItems = GetInboxNumItems()
-    if numItems == 0 then return end
+    if numItems == 0 then
+        -- Inbox might not be populated yet; request data and wait
+        if not mailWaitingForData then
+            mailWaitingForData = true
+            CheckInbox()
+        end
+        return
+    end
 
+    mailWaitingForData = false
     mail.processing = true
     mail.index = numItems
     mail.totalMoney = 0
     mail.itemsCollected = 0
 
     C_Timer.After(0.5, CollectNextMail)
+end
+
+local function HandleMailInboxUpdate()
+    if mailWaitingForData then
+        mailWaitingForData = false
+        StartMailCollection()
+    end
 end
 
 local function StopMailCollection()
@@ -409,9 +483,57 @@ local function SendDungeonGG()
     end)
 end
 
+-- Auto-leave instance timer
+local leaveTimer = nil
+
+local function CancelAutoLeave()
+    if leaveTimer then
+        leaveTimer:Cancel()
+        leaveTimer = nil
+        print("|cff88cc88[WaffleOptions]|r Auto-leave cancelled.")
+    end
+end
+
+local function StartAutoLeave()
+    if not WaffleOptionsDB.autoLeaveEnabled then return end
+    if leaveTimer then return end
+    local delay = tonumber(WaffleOptionsDB.autoLeaveDelay) or 15
+    print("|cff88cc88[WaffleOptions]|r Leaving group in " .. delay .. " seconds. Type /wafflecancel to cancel.")
+    leaveTimer = C_Timer.NewTimer(delay, function()
+        leaveTimer = nil
+        pcall(LeaveParty)
+        print("|cff88cc88[WaffleOptions]|r Left group automatically.")
+    end)
+end
+
 local function HandleMythicPlusComplete()
     if WaffleOptionsDB.dungeonGGMythicPlus then
         SendDungeonGG()
+    end
+    -- Key result
+    if WaffleOptionsDB.dungeonKeyResult then
+        C_Timer.After(2, function()
+            local keyLevel = C_MythicPlus.GetOwnedKeystoneLevel()
+            local mapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
+            if keyLevel and mapID then
+                local mapName = C_ChallengeMode.GetMapUIInfo(mapID)
+                local _, _, _, onTime = C_ChallengeMode.GetCompletionInfo()
+                if onTime then
+                    SendToChannel(WaffleOptionsDB.dungeonKeyResultChannel,
+                        "|cff88cc88[WaffleOptions]|r Key upgraded! New key: " .. (mapName or "?") .. " +" .. keyLevel)
+                else
+                    SendToChannel(WaffleOptionsDB.dungeonKeyResultChannel,
+                        "|cffff4444[WaffleOptions]|r Key depleted. New key: " .. (mapName or "?") .. " +" .. keyLevel)
+                    if WaffleOptionsDB.dungeonKeyResultSound then
+                        PlaySound(WaffleOptionsDB.dungeonKeyResultSoundID or 11466, "Master")
+                    end
+                end
+            end
+        end)
+    end
+    -- Auto-leave
+    if WaffleOptionsDB.autoLeaveMythicPlus then
+        StartAutoLeave()
     end
 end
 
@@ -419,15 +541,29 @@ local function HandleDungeonComplete()
     if WaffleOptionsDB.dungeonGGRegular then
         SendDungeonGG()
     end
+    -- Auto-leave
+    if WaffleOptionsDB.autoLeaveRegular then
+        StartAutoLeave()
+    end
 end
 
 local function HandleEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
     if success ~= 1 then return end
-    if not WaffleOptionsDB.dungeonGGRaidBoss then return end
-    -- Only trigger in raid instances
+    -- GG message for raid bosses
     local _, instanceType = GetInstanceInfo()
-    if instanceType ~= "raid" then return end
-    SendDungeonGG()
+    if WaffleOptionsDB.dungeonGGRaidBoss and instanceType == "raid" then
+        SendDungeonGG()
+    end
+    -- Auto-screenshot on boss kill
+    if WaffleOptionsDB.autoScreenshotEnabled and WaffleOptionsDB.autoScreenshotBossKill then
+        local delay = tonumber(WaffleOptionsDB.autoScreenshotDelay) or 1
+        C_Timer.After(delay, function()
+            Screenshot()
+            if WaffleOptionsDB.autoScreenshotChat then
+                print("|cff88cc88[WaffleOptions]|r Screenshot saved (Boss: " .. (encounterName or "Unknown") .. ").")
+            end
+        end)
+    end
 end
 
 -- Dungeon: Send message to a specific channel
@@ -571,6 +707,26 @@ local function RunSpecAndTalentCheck()
                 end
             end
         end
+
+        -- Loot spec warning
+        if WaffleOptionsDB.dungeonLootSpecWarning then
+            local lootSpecID = GetLootSpecialization()
+            if lootSpecID ~= 0 then
+                local specIndex = GetSpecialization()
+                if specIndex then
+                    local currentSpecID = GetSpecializationInfo(specIndex)
+                    if currentSpecID and lootSpecID ~= currentSpecID then
+                        local _, lootSpecName = GetSpecializationInfoByID(lootSpecID)
+                        SendToChannel(WaffleOptionsDB.dungeonLootSpecChannel,
+                            "|cffff8800[WaffleOptions]|r Loot spec is set to |cffffffff" ..
+                            (lootSpecName or "Unknown") .. "|r (differs from active spec!)")
+                        if WaffleOptionsDB.dungeonLootSpecSound then
+                            PlaySound(WaffleOptionsDB.dungeonLootSpecSoundID or 11466, "Master")
+                        end
+                    end
+                end
+            end
+        end
 end
 
 local function HandleZoneChanged()
@@ -687,6 +843,329 @@ local function HandleReadyCheck()
     end
 end
 
+-- Auto-Accept Party Invites
+local function IsPlayerFriend(name)
+    -- Check character friends
+    local numFriends = C_FriendList.GetNumFriends()
+    for i = 1, numFriends do
+        local info = C_FriendList.GetFriendInfoByIndex(i)
+        if info and info.name and Ambiguate(info.name, "none") == Ambiguate(name, "none") then
+            return true
+        end
+    end
+    -- Check BNet friends
+    local numBNet = BNGetNumFriends()
+    for i = 1, numBNet do
+        local numAccounts = C_BattleNet.GetFriendNumGameAccounts(i)
+        for j = 1, numAccounts do
+            local accountInfo = C_BattleNet.GetFriendGameAccountInfo(i, j)
+            if accountInfo and accountInfo.characterName then
+                if Ambiguate(accountInfo.characterName, "none") == Ambiguate(name, "none") then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function IsPlayerGuildmate(name)
+    local numMembers = GetNumGuildMembers()
+    for i = 1, numMembers do
+        local guildName = GetGuildRosterInfo(i)
+        if guildName and Ambiguate(guildName, "none") == Ambiguate(name, "none") then
+            return true
+        end
+    end
+    return false
+end
+
+local function HandlePartyInvite(inviterName)
+    if not WaffleOptionsDB.autoPartyEnabled then return end
+    local accepted = false
+    if WaffleOptionsDB.autoPartyFriends and IsPlayerFriend(inviterName) then
+        accepted = true
+    end
+    if not accepted and WaffleOptionsDB.autoPartyGuild and IsPlayerGuildmate(inviterName) then
+        accepted = true
+    end
+    if accepted then
+        pcall(AcceptGroup)
+        StaticPopup_Hide("PARTY_INVITE")
+        StaticPopup_Hide("PARTY_INVITE_XREALM")
+        print("|cff88cc88[WaffleOptions]|r Auto-accepted party invite from " .. inviterName .. ".")
+    end
+end
+
+-- Party Greetings
+local function SendRandomGreeting(dbKey, replacements)
+    local messages = WaffleOptionsDB[dbKey]
+    if not messages or #messages == 0 then return end
+    local channel = GetGroupChatChannel()
+    if not channel then return end
+    local msg = messages[math.random(#messages)]
+    if replacements then
+        for token, value in pairs(replacements) do
+            msg = msg:gsub("{" .. token .. "}", value)
+        end
+    end
+    SendChatMessage(msg, channel)
+end
+
+local lastRoster = {}
+
+local function GetCurrentRoster()
+    local roster = {}
+    if not IsInGroup() then return roster end
+    local prefix = IsInRaid() and "raid" or "party"
+    local count = GetNumGroupMembers()
+    if IsInRaid() then
+        for i = 1, count do
+            local name = UnitName(prefix .. i)
+            if name then roster[name] = true end
+        end
+    else
+        for i = 1, count - 1 do
+            local name = UnitName(prefix .. i)
+            if name then roster[name] = true end
+        end
+    end
+    return roster
+end
+
+local function HandleGroupJoinGreeting()
+    if not WaffleOptionsDB.partyGreetOnJoin then return end
+    C_Timer.After(2, function()
+        if IsInGroup() then
+            SendRandomGreeting("partyGreetOnJoinMessages")
+        end
+        lastRoster = GetCurrentRoster()
+    end)
+end
+
+local function HandleGroupRosterUpdate()
+    if not IsInGroup() then
+        wipe(lastRoster)
+        return
+    end
+    local newRoster = GetCurrentRoster()
+    if WaffleOptionsDB.partyGreetOnMemberJoin and next(lastRoster) then
+        -- Find new members
+        local newNames = {}
+        for name in pairs(newRoster) do
+            if not lastRoster[name] and name ~= UnitName("player") then
+                tinsert(newNames, name)
+            end
+        end
+        if #newNames > 0 then
+            C_Timer.After(1, function()
+                if IsInGroup() then
+                    local joinedName = newNames[1]
+                    SendRandomGreeting("partyGreetOnMemberJoinMessages", { player = joinedName })
+                end
+            end)
+        end
+    end
+    lastRoster = newRoster
+end
+
+-- Auto-Release Spirit
+local function HandlePlayerDead()
+    if not WaffleOptionsDB.autoReleaseEnabled then return end
+    local inInstance = IsInInstance()
+    if inInstance then return end
+    local delay = tonumber(WaffleOptionsDB.autoReleaseDelay) or 2
+    C_Timer.After(delay, function()
+        if UnitIsDead("player") and not IsInInstance() then
+            pcall(RepopMe)
+            print("|cff88cc88[WaffleOptions]|r Auto-released spirit.")
+        end
+    end)
+end
+
+-- Auto-Quest
+local function HandleQuestDetail()
+    if IsShiftKeyDown() then return end
+    if not WaffleOptionsDB.autoQuestAccept then return end
+    -- Skip non-repeatable quests if repeatables-only not set (we accept all when enabled)
+    pcall(AcceptQuest)
+end
+
+local function HandleQuestComplete()
+    if IsShiftKeyDown() then return end
+    if not WaffleOptionsDB.autoQuestComplete then return end
+    -- Don't auto-complete if there are multiple reward choices
+    local numChoices = GetNumQuestChoices()
+    if numChoices > 1 then return end
+    pcall(CompleteQuest)
+end
+
+local function HandleQuestProgress()
+    if IsShiftKeyDown() then return end
+    if not WaffleOptionsDB.autoQuestComplete then return end
+    if IsQuestCompletable() then
+        pcall(CompleteQuest)
+    end
+end
+
+-- Gossip Skip
+local function HandleGossipShow()
+    if IsShiftKeyDown() then return end
+    if not WaffleOptionsDB.autoGossipSkip then return end
+    local options = C_GossipInfo.GetOptions()
+    if options and #options == 1 then
+        C_GossipInfo.SelectOption(options[1].gossipOptionID)
+    end
+end
+
+-- Achievement Congratulations
+local achieveGratsCooldown = {}
+
+local function HandleChatMsgAchievement(_, playerName)
+    if not playerName then return end
+    -- Strip realm name for display
+    local shortName = Ambiguate(playerName, "none")
+    -- Don't congratulate yourself
+    if shortName == UnitName("player") then return end
+
+    -- Check if player is in our party/raid
+    local inParty = false
+    if IsInGroup() then
+        local prefix = IsInRaid() and "raid" or "party"
+        local count = IsInRaid() and GetNumGroupMembers() or (GetNumGroupMembers() - 1)
+        for i = 1, count do
+            local unitName = UnitName(prefix .. i)
+            if unitName and Ambiguate(unitName, "none") == shortName then
+                inParty = true
+                break
+            end
+        end
+    end
+
+    -- Check if player is in our guild
+    local inGuild = false
+    if IsInGuild() then
+        local numMembers = GetNumGuildMembers()
+        for i = 1, numMembers do
+            local guildName = GetGuildRosterInfo(i)
+            if guildName and Ambiguate(guildName, "none") == shortName then
+                inGuild = true
+                break
+            end
+        end
+    end
+
+    -- Determine where to send (guild takes priority to reduce spam)
+    local channel = nil
+    if inGuild and WaffleOptionsDB.achieveGratsGuild then
+        channel = "GUILD"
+    elseif inParty and WaffleOptionsDB.achieveGratsParty and not (inGuild and WaffleOptionsDB.achieveGratsGuild) then
+        local groupChannel = GetGroupChatChannel()
+        if groupChannel then channel = groupChannel end
+    end
+
+    if not channel then return end
+
+    -- Cooldown: don't spam if multiple achievements come in quick succession
+    local now = GetTime()
+    if achieveGratsCooldown[shortName] and (now - achieveGratsCooldown[shortName]) < 10 then return end
+    achieveGratsCooldown[shortName] = now
+
+    local messages = WaffleOptionsDB.achieveGratsMessages
+    if not messages or #messages == 0 then return end
+    local msg = messages[math.random(#messages)]
+    msg = msg:gsub("{player}", shortName)
+    C_Timer.After(1 + math.random() * 2, function()
+        SendChatMessage(msg, channel)
+    end)
+end
+
+-- Auto-Screenshot
+local function HandleAchievementEarned(achievementID)
+    if not WaffleOptionsDB.autoScreenshotEnabled then return end
+    if not WaffleOptionsDB.autoScreenshotAchievement then return end
+    local _, name = GetAchievementInfo(achievementID)
+    local delay = tonumber(WaffleOptionsDB.autoScreenshotDelay) or 1
+    C_Timer.After(delay, function()
+        Screenshot()
+        if WaffleOptionsDB.autoScreenshotChat then
+            print("|cff88cc88[WaffleOptions]|r Screenshot saved (Achievement: " .. (name or "Unknown") .. ").")
+        end
+    end)
+end
+
+local function HandleLevelUp(newLevel)
+    if not WaffleOptionsDB.autoScreenshotEnabled then return end
+    if not WaffleOptionsDB.autoScreenshotLevelUp then return end
+    local delay = tonumber(WaffleOptionsDB.autoScreenshotDelay) or 1
+    C_Timer.After(delay, function()
+        Screenshot()
+        if WaffleOptionsDB.autoScreenshotChat then
+            print("|cff88cc88[WaffleOptions]|r Screenshot saved (Level " .. newLevel .. ").")
+        end
+    end)
+end
+
+-- Auto-Confirm Loot Rolls
+local function HandleConfirmLootRoll(rollID, rollType)
+    if not WaffleOptionsDB.autoConfirmLoot then return end
+    pcall(ConfirmLootRoll, rollID, rollType)
+    StaticPopup_Hide("CONFIRM_LOOT_ROLL")
+end
+
+local function HandleLootBindConfirm(lootSlot)
+    if not WaffleOptionsDB.autoConfirmLoot then return end
+    pcall(ConfirmLootSlot, lootSlot)
+    StaticPopup_Hide("LOOT_BIND_CONFIRM")
+end
+
+-- Auto-Fill Delete Text (hook StaticPopup_Show)
+local function SetupAutoFillDelete()
+    hooksecurefunc("StaticPopup_Show", function(which)
+        if not WaffleOptionsDB.autoFillDelete then return end
+        if which == "DELETE_ITEM" or which == "DELETE_GOOD_ITEM" or which == "DELETE_QUEST_ITEM" then
+            local popup = StaticPopup_Visible(which)
+            if popup then
+                local dialog = _G[popup]
+                if dialog and dialog.editBox then
+                    dialog.editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
+                end
+            end
+        end
+    end)
+end
+
+-- Auto Role Check
+local function HandleRoleCheckShow()
+    if not WaffleOptionsDB.autoRoleCheck then return end
+    pcall(CompleteLFGRoleCheck, true)
+end
+
+-- Combat Res Tracker
+local COMBAT_RES_SPELLS = {
+    [20484]  = "Rebirth",           -- Druid
+    [20707]  = "Soulstone",         -- Warlock
+    [61999]  = "Raise Ally",        -- Death Knight
+    [391054] = "Intercession",      -- Paladin
+}
+
+-- Interrupt Announcements
+local INTERRUPT_SPELLS = {
+    [1766]   = "Kick",              -- Rogue
+    [6552]   = "Pummel",            -- Warrior
+    [183752] = "Disrupt",           -- Demon Hunter
+    [47528]  = "Mind Freeze",       -- Death Knight
+    [116705] = "Spear Hand Strike", -- Monk
+    [96231]  = "Rebuke",            -- Paladin
+    [57994]  = "Wind Shear",        -- Shaman
+    [2139]   = "Counterspell",      -- Mage
+    [19647]  = "Spell Lock",        -- Warlock (pet)
+    [351338] = "Quell",             -- Evoker
+    [93321]  = "Skull Bash",        -- Druid (Feral/Guardian)
+    [106839] = "Skull Bash",        -- Druid (alt ID)
+    [187707] = "Muzzle",           -- Hunter
+}
+
 -- Group utility announcements (mage table, warlock summon, feasts)
 local MAGE_TABLE_SPELL = 190336   -- Conjure Refreshment Table
 local WARLOCK_SUMMON_SPELL = 698  -- Ritual of Summoning
@@ -708,13 +1187,31 @@ local FEAST_SPELLS = {
     [359336] = true, -- Empty Kettle of Stone Soup
 }
 
-local function HandleGroupUtilitySpellcast(unit, _, spellID)
+local function HandleSpellcastSucceeded(unit, _, spellID)
+    -- Interrupt announcements (player only)
+    if (unit == "player" or unit == "pet") and WaffleOptionsDB.dungeonInterruptAnnounce then
+        local interruptName = INTERRUPT_SPELLS[spellID]
+        if interruptName then
+            local msg = (WaffleOptionsDB.dungeonInterruptMsg or "Interrupted with {spell}!"):gsub("{spell}", interruptName)
+            SendToChannel(WaffleOptionsDB.dungeonInterruptChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
+        end
+    end
+
+    -- Group utility announcements and combat res tracker require being in a group
     if not IsInGroup() then return end
     if not UnitIsPlayer(unit) then return end
 
-    local msg
     local unitName = UnitName(unit)
 
+    -- Combat res tracker
+    if WaffleOptionsDB.dungeonCombatResTracker and COMBAT_RES_SPELLS[spellID] then
+        local resName = COMBAT_RES_SPELLS[spellID]
+        SendToChannel(WaffleOptionsDB.dungeonCombatResChannel,
+            "|cff88cc88[WaffleOptions]|r " .. unitName .. " used " .. resName .. "!")
+    end
+
+    -- Group utility announcements
+    local msg
     if spellID == MAGE_TABLE_SPELL and WaffleOptionsDB.dungeonAnnounceMageTable then
         msg = unitName .. " placed a Mage Table!"
     elseif spellID == WARLOCK_SUMMON_SPELL and WaffleOptionsDB.dungeonAnnounceWarlock then
@@ -734,6 +1231,7 @@ frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("MERCHANT_SHOW")
 frame:RegisterEvent("MAIL_SHOW")
 frame:RegisterEvent("MAIL_CLOSED")
+frame:RegisterEvent("MAIL_INBOX_UPDATE")
 frame:RegisterEvent("CONFIRM_SUMMON")
 frame:RegisterEvent("RESURRECT_REQUEST")
 frame:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -741,18 +1239,33 @@ frame:RegisterEvent("CINEMATIC_START")
 frame:RegisterEvent("PLAY_MOVIE")
 frame:RegisterEvent("TALKINGHEAD_REQUESTED")
 frame:RegisterEvent("GROUP_JOINED")
+frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
 frame:RegisterEvent("LFG_COMPLETION_REWARD")
 frame:RegisterEvent("ENCOUNTER_END")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("READY_CHECK")
 frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+frame:RegisterEvent("PARTY_INVITE_REQUEST")
+frame:RegisterEvent("PLAYER_DEAD")
+frame:RegisterEvent("QUEST_DETAIL")
+frame:RegisterEvent("QUEST_COMPLETE")
+frame:RegisterEvent("QUEST_PROGRESS")
+frame:RegisterEvent("GOSSIP_SHOW")
+frame:RegisterEvent("ACHIEVEMENT_EARNED")
+frame:RegisterEvent("CHAT_MSG_ACHIEVEMENT")
+frame:RegisterEvent("CHAT_MSG_GUILD_ACHIEVEMENT")
+frame:RegisterEvent("PLAYER_LEVEL_UP")
+frame:RegisterEvent("CONFIRM_LOOT_ROLL")
+frame:RegisterEvent("LOOT_BIND_CONFIRM")
+frame:RegisterEvent("LFG_ROLE_CHECK_SHOW")
 frame:SetScript("OnEvent", function(self, event, ...)
     local arg1, arg2, arg3, arg4, arg5 = ...
     if event == "ADDON_LOADED" then
         if arg1 == addonName then
             InitDB()
             SetupKeystoneAutoInsert()
+            SetupAutoFillDelete()
             print("|cff88cc88[WaffleOptions]|r Loaded. Type /waffle for options.")
         end
         -- Try hooking keystone frame whenever any addon loads (it's load-on-demand)
@@ -764,6 +1277,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
         StartMailCollection()
     elseif event == "MAIL_CLOSED" then
         StopMailCollection()
+        mailWaitingForData = false
+    elseif event == "MAIL_INBOX_UPDATE" then
+        HandleMailInboxUpdate()
     elseif event == "CONFIRM_SUMMON" then
         HandleSummon()
     elseif event == "RESURRECT_REQUEST" then
@@ -778,6 +1294,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
         HandleTalkingHead()
     elseif event == "GROUP_JOINED" then
         HandleGroupJoined()
+        HandleGroupJoinGreeting()
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        HandleGroupRosterUpdate()
     elseif event == "CHALLENGE_MODE_COMPLETED" then
         HandleMythicPlusComplete()
     elseif event == "LFG_COMPLETION_REWARD" then
@@ -789,7 +1308,31 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "READY_CHECK" then
         HandleReadyCheck()
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        HandleGroupUtilitySpellcast(arg1, arg2, arg3)
+        HandleSpellcastSucceeded(arg1, arg2, arg3)
+    elseif event == "PARTY_INVITE_REQUEST" then
+        HandlePartyInvite(arg1)
+    elseif event == "PLAYER_DEAD" then
+        HandlePlayerDead()
+    elseif event == "QUEST_DETAIL" then
+        HandleQuestDetail()
+    elseif event == "QUEST_COMPLETE" then
+        HandleQuestComplete()
+    elseif event == "QUEST_PROGRESS" then
+        HandleQuestProgress()
+    elseif event == "GOSSIP_SHOW" then
+        HandleGossipShow()
+    elseif event == "ACHIEVEMENT_EARNED" then
+        HandleAchievementEarned(arg1)
+    elseif event == "CHAT_MSG_ACHIEVEMENT" or event == "CHAT_MSG_GUILD_ACHIEVEMENT" then
+        HandleChatMsgAchievement(arg1, arg2)
+    elseif event == "PLAYER_LEVEL_UP" then
+        HandleLevelUp(arg1)
+    elseif event == "CONFIRM_LOOT_ROLL" then
+        HandleConfirmLootRoll(arg1, arg2)
+    elseif event == "LOOT_BIND_CONFIRM" then
+        HandleLootBindConfirm(arg1)
+    elseif event == "LFG_ROLE_CHECK_SHOW" then
+        HandleRoleCheckShow()
     end
 end)
 
@@ -799,6 +1342,12 @@ SlashCmdList["WAFFLEMATIONS"] = function()
     if WaffleOptions.ToggleOptions then
         WaffleOptions.ToggleOptions()
     end
+end
+
+-- Cancel auto-leave command
+SLASH_WAFFLECANCEL1 = "/wafflecancel"
+SlashCmdList["WAFFLECANCEL"] = function()
+    CancelAutoLeave()
 end
 
 -- Test command: triggers dungeon checks regardless of location

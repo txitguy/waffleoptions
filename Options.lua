@@ -4,7 +4,7 @@
 -- Layout Constants
 -------------------------------------------------
 local PANEL_WIDTH   = 680
-local PANEL_HEIGHT  = 520
+local PANEL_HEIGHT  = 700
 local SIDEBAR_WIDTH = 160
 local TITLE_HEIGHT  = 30
 
@@ -210,8 +210,16 @@ local categories = {}
 local contentFrames = {}
 local selectedCategory = nil
 local sidebarItems = {}      -- ordered list: {type, name, frame, section}
+local activeDropdowns = {}   -- track open dropdown lists
+
+local function CloseAllDropdowns()
+    for _, dd in ipairs(activeDropdowns) do
+        dd:Hide()
+    end
+end
 
 local function SelectCategory(name)
+    CloseAllDropdowns()
     if selectedCategory == name then return end
     selectedCategory = name
     for cn, btn in pairs(categories) do
@@ -547,6 +555,180 @@ local function CreateTextInput(parent, label, y, width, dbKey)
 end
 
 -------------------------------------------------
+-- Helper: Editable string list (add/remove items)
+-------------------------------------------------
+local function CreateStringList(parent, label, y, dbKey)
+    local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lbl:SetPoint("TOPLEFT", PAD, y)
+    lbl:SetText(label)
+    lbl:SetTextColor(unpack(C.label))
+
+    local listContainer = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    listContainer:SetPoint("TOPLEFT", PAD, y - 16)
+    listContainer:SetSize(390, 120)
+    listContainer:SetBackdrop(BACKDROP)
+    listContainer:SetBackdropColor(0.04, 0.04, 0.04, 1)
+    listContainer:SetBackdropBorderColor(unpack(C.border))
+
+    -- Scroll frame for list items
+    local listScroll = CreateFrame("ScrollFrame", nil, listContainer)
+    listScroll:SetPoint("TOPLEFT", 2, -2)
+    listScroll:SetPoint("BOTTOMRIGHT", -10, 2)
+    listScroll:EnableMouseWheel(true)
+
+    local listContent = CreateFrame("Frame", nil, listScroll)
+    listContent:SetWidth(378)
+    listContent:SetHeight(1)
+    listScroll:SetScrollChild(listContent)
+
+    -- Scrollbar
+    local lsBar = CreateFrame("Slider", nil, listContainer, "BackdropTemplate")
+    lsBar:SetWidth(5)
+    lsBar:SetPoint("TOPRIGHT", -3, -3)
+    lsBar:SetPoint("BOTTOMRIGHT", -3, 3)
+    lsBar:SetBackdrop(BACKDROP)
+    lsBar:SetBackdropColor(0.035, 0.035, 0.035, 1)
+    lsBar:SetBackdropBorderColor(unpack(C.border))
+    lsBar:SetMinMaxValues(0, 1)
+    lsBar:SetValue(0)
+    lsBar:SetValueStep(1)
+    lsBar:SetObeyStepOnDrag(true)
+
+    local lsThumb = lsBar:CreateTexture(nil, "OVERLAY")
+    lsThumb:SetColorTexture(unpack(C.accentDim))
+    lsThumb:SetSize(5, 30)
+    lsBar:SetThumbTexture(lsThumb)
+
+    lsBar:SetScript("OnValueChanged", function(_, val)
+        listScroll:SetVerticalScroll(val)
+    end)
+
+    local function UpdateListScrollbar()
+        local contentH = listContent:GetHeight()
+        local viewH = listScroll:GetHeight()
+        local maxS = math.max(0, contentH - viewH)
+        lsBar:SetMinMaxValues(0, maxS)
+        lsBar:SetShown(maxS > 0)
+        if contentH > 0 and viewH > 0 and contentH > viewH then
+            local track = lsBar:GetHeight()
+            lsThumb:SetHeight(math.max(20, track * (viewH / contentH)))
+        end
+    end
+
+    listScroll:SetScript("OnMouseWheel", function(_, delta)
+        local cur = lsBar:GetValue()
+        local lo, hi = lsBar:GetMinMaxValues()
+        lsBar:SetValue(math.max(lo, math.min(hi, cur - delta * 22)))
+    end)
+
+    local ITEM_H = 22
+    local items = {}
+
+    local function Rebuild()
+        for _, row in ipairs(items) do row:Hide() end
+        wipe(items)
+        local msgs = WaffleOptionsDB[dbKey] or {}
+        for i, msg in ipairs(msgs) do
+            local row = CreateFrame("Frame", nil, listContent)
+            row:SetHeight(ITEM_H)
+            row:SetPoint("TOPLEFT", 0, -(i - 1) * ITEM_H)
+            row:SetPoint("RIGHT", listContent, "RIGHT", 0, 0)
+
+            local rowBg = row:CreateTexture(nil, "BACKGROUND")
+            rowBg:SetAllPoints()
+            rowBg:SetColorTexture(0, 0, 0, 0)
+
+            local rowText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            rowText:SetPoint("LEFT", 8, 0)
+            rowText:SetPoint("RIGHT", row, "RIGHT", -26, 0)
+            rowText:SetJustifyH("LEFT")
+            rowText:SetText(msg)
+            rowText:SetTextColor(unpack(C.text))
+
+            -- Remove button
+            local removeBtn = CreateFrame("Button", nil, row)
+            removeBtn:SetSize(18, 18)
+            removeBtn:SetPoint("RIGHT", -4, 0)
+            local removeTxt = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            removeTxt:SetPoint("CENTER")
+            removeTxt:SetText("|cffaa3333x|r")
+
+            removeBtn:SetScript("OnEnter", function()
+                removeTxt:SetText("|cffff4444x|r")
+                rowBg:SetColorTexture(0.15, 0.05, 0.05, 0.5)
+            end)
+            removeBtn:SetScript("OnLeave", function()
+                removeTxt:SetText("|cffaa3333x|r")
+                rowBg:SetColorTexture(0, 0, 0, 0)
+            end)
+            removeBtn:SetScript("OnClick", function()
+                tremove(WaffleOptionsDB[dbKey], i)
+                Rebuild()
+            end)
+
+            row:SetScript("OnEnter", function() rowBg:SetColorTexture(unpack(C.catHover)) end)
+            row:SetScript("OnLeave", function() rowBg:SetColorTexture(0, 0, 0, 0) end)
+
+            tinsert(items, row)
+        end
+        listContent:SetHeight(math.max(1, #msgs * ITEM_H))
+        lsBar:SetValue(0)
+        C_Timer.After(0, UpdateListScrollbar)
+    end
+
+    -- Add input row
+    local addBox = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
+    addBox:SetSize(340, 24)
+    addBox:SetPoint("TOPLEFT", listContainer, "BOTTOMLEFT", 0, -4)
+    addBox:SetBackdrop(BACKDROP)
+    addBox:SetBackdropColor(0.05, 0.05, 0.05, 1)
+    addBox:SetBackdropBorderColor(unpack(C.border))
+    addBox:SetFontObject("GameFontNormalSmall")
+    addBox:SetTextColor(unpack(C.text))
+    addBox:SetTextInsets(8, 8, 0, 0)
+    addBox:SetAutoFocus(false)
+    addBox:SetMaxLetters(200)
+
+    local addBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    addBtn:SetSize(46, 24)
+    addBtn:SetPoint("LEFT", addBox, "RIGHT", 4, 0)
+    addBtn:SetBackdrop(BACKDROP)
+    addBtn:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    addBtn:SetBackdropBorderColor(unpack(C.border))
+
+    local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    addBtnText:SetPoint("CENTER")
+    addBtnText:SetText("Add")
+    addBtnText:SetTextColor(unpack(C.accent))
+
+    addBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
+    addBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(unpack(C.border)) end)
+
+    local function DoAdd()
+        local txt = addBox:GetText()
+        if txt and txt:trim() ~= "" then
+            if not WaffleOptionsDB[dbKey] then WaffleOptionsDB[dbKey] = {} end
+            tinsert(WaffleOptionsDB[dbKey], txt:trim())
+            addBox:SetText("")
+            Rebuild()
+        end
+        addBox:ClearFocus()
+    end
+
+    addBtn:SetScript("OnClick", DoAdd)
+    addBox:SetScript("OnEnterPressed", DoAdd)
+    addBox:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+    addBox:SetScript("OnEditFocusGained", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
+    addBox:SetScript("OnEditFocusLost", function(self) self:SetBackdropBorderColor(unpack(C.border)) end)
+
+    parent:HookScript("OnShow", Rebuild)
+    Rebuild()
+
+    -- Total height: label(16) + list(120) + gap(4) + addRow(24) = 164
+    return listContainer, y - 164
+end
+
+-------------------------------------------------
 -- Helper: Sound picker (dropdown + play button)
 -------------------------------------------------
 -- Curated alert sound list
@@ -556,18 +738,41 @@ local function AddSound(key, label)
         tinsert(ALERT_SOUNDS, { id = SOUNDKIT[key], name = label })
     end
 end
+-- General alerts
 AddSound("RAID_WARNING",           "Raid Warning")
 AddSound("READY_CHECK",            "Ready Check")
 AddSound("ALARM_CLOCK_WARNING_3",  "Alarm Clock")
 AddSound("PVP_THROUGH_QUEUE",      "Queue Ready")
 AddSound("MAP_PING",               "Map Ping")
-AddSound("LEVEL_UP",               "Level Up")
-AddSound("UI_EPICLOOT_TOAST",      "Epic Loot Toast")
-AddSound("UI_RAID_BOSS_WHISPER",   "Boss Whisper")
 AddSound("GM_CHAT_WARNING",        "GM Warning")
+-- Progression
+AddSound("LEVEL_UP",               "Level Up")
 AddSound("UI_70_BOOST_THANKSFORPLAYING_SMALLER", "Quest Complete Fanfare")
--- "You are not prepared" (Illidan)
-tinsert(ALERT_SOUNDS, { id = 11466, name = "You Are Not Prepared" })
+-- Loot & rewards
+AddSound("UI_EPICLOOT_TOAST",      "Epic Loot Toast")
+AddSound("UI_LEGENDARY_LOOT_TOAST", "Legendary Loot Toast")
+AddSound("UI_RAID_LOOT_TOAST_LESSER_ITEM_WON", "Raid Loot Won")
+AddSound("UI_WARFORGED_ITEM_LOOT_TOAST", "Warforged Loot Toast")
+-- Boss & combat
+AddSound("UI_RAID_BOSS_WHISPER",   "Boss Whisper")
+AddSound("UI_RAID_BOSS_DEFEATED",  "Boss Defeated")
+-- PvP
+AddSound("PVP_FLAG_TAKEN_HORDE",   "PvP Flag Taken (Horde)")
+AddSound("PVP_FLAG_TAKEN_ALLIANCE","PvP Flag Taken (Alliance)")
+AddSound("BATTLEGROUND_WARNING",   "Battleground Warning")
+-- UI & misc
+AddSound("TELL_MESSAGE",           "Whisper Received")
+AddSound("UI_BONUS_EVENT_SYSTEM_VIGNETTES", "Bonus Event / Vignette")
+AddSound("LFG_DENIED",             "LFG Denied")
+AddSound("UI_GROUP_FINDER_RECEIVE_APPLICATION", "Group Finder Application")
+AddSound("UI_SCENARIO_STAGE_END",  "Scenario Stage End")
+AddSound("UI_QUEST_ROLLING_FORWARD_01", "Quest Rolling")
+AddSound("AUCTION_WINDOW_OPEN",    "Auction House Open")
+AddSound("UI_PET_BATTLES_TRAP_READY", "Pet Battle Trap Ready")
+AddSound("UI_GARRISON_TOAST",      "Garrison Toast")
+-- Named / iconic sounds by ID
+tinsert(ALERT_SOUNDS, { id = 11466, name = "You Are Not Prepared (Illidan)" })
+tinsert(ALERT_SOUNDS, { id = 15391, name = "Algalon - Beware" })
 table.sort(ALERT_SOUNDS, function(a, b) return a.name < b.name end)
 
 local function CreateSoundPicker(parent, y, dbKey)
@@ -588,41 +793,109 @@ local function CreateSoundPicker(parent, y, dbKey)
     dropText:SetPoint("LEFT", 8, 0)
     dropText:SetTextColor(unpack(C.text))
 
-    local dropArrow = dropBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    dropArrow:SetPoint("RIGHT", -8, 0)
-    dropArrow:SetText("v")
-    dropArrow:SetTextColor(unpack(C.textDim))
+    local dropArrow = dropBtn:CreateTexture(nil, "OVERLAY")
+    dropArrow:SetSize(16, 16)
+    dropArrow:SetPoint("RIGHT", -4, 0)
+    dropArrow:SetTexture(-1985)
+    dropArrow:SetRotation(math.pi)
+    dropArrow:SetVertexColor(0.78, 0.78, 0.78, 1)
 
     -- Play preview button
     local playBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    playBtn:SetSize(50, 24)
+    playBtn:SetSize(28, 24)
     playBtn:SetPoint("LEFT", dropBtn, "RIGHT", 6, 0)
     playBtn:SetBackdrop(BACKDROP)
     playBtn:SetBackdropColor(0.1, 0.1, 0.1, 1)
     playBtn:SetBackdropBorderColor(unpack(C.border))
 
-    local playText = playBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    playText:SetPoint("CENTER")
-    playText:SetText("Play")
-    playText:SetTextColor(unpack(C.accent))
+    local playIcon = playBtn:CreateTexture(nil, "ARTWORK")
+    playIcon:SetSize(16, 16)
+    playIcon:SetPoint("CENTER")
+    playIcon:SetAtlas("chatframe-button-icon-voicechat")
 
-    playBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
-    playBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(unpack(C.border)) end)
+    playBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(unpack(C.accent))
+        playIcon:SetAtlas("chatframe-button-icon-voicechat-on")
+    end)
+    playBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(unpack(C.border))
+        playIcon:SetAtlas("chatframe-button-icon-voicechat")
+    end)
     playBtn:SetScript("OnClick", function()
         PlaySound(WaffleOptionsDB[dbKey] or 11466, "Master")
     end)
 
-    -- Simple dropdown list (no scroll needed for small lists)
     local LIST_ITEM_H = 22
+    local MAX_VISIBLE = 14
+    local listH = math.min(#ALERT_SOUNDS, MAX_VISIBLE) * LIST_ITEM_H + 4
 
-    local listFrame = CreateFrame("Frame", nil, dropBtn, "BackdropTemplate")
-    listFrame:SetPoint("TOPLEFT", dropBtn, "BOTTOMLEFT", 0, -2)
-    listFrame:SetSize(300, #ALERT_SOUNDS * LIST_ITEM_H + 4)
+    local listFrame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    listFrame:SetSize(300, listH)
     listFrame:SetBackdrop(BACKDROP)
     listFrame:SetBackdropColor(0.04, 0.04, 0.04, 0.98)
     listFrame:SetBackdropBorderColor(unpack(C.border))
     listFrame:SetFrameStrata("TOOLTIP")
+    listFrame:SetFrameLevel(100)
     listFrame:Hide()
+    listFrame:SetClampedToScreen(true)
+    tinsert(activeDropdowns, listFrame)
+
+    -- Scroll frame inside dropdown
+    local listScroll = CreateFrame("ScrollFrame", nil, listFrame)
+    listScroll:SetPoint("TOPLEFT", 2, -2)
+    listScroll:SetPoint("BOTTOMRIGHT", -10, 2)
+    listScroll:EnableMouseWheel(true)
+
+    local listContent = CreateFrame("Frame", nil, listScroll)
+    listContent:SetWidth(288)
+    listContent:SetHeight(#ALERT_SOUNDS * LIST_ITEM_H)
+    listScroll:SetScrollChild(listContent)
+
+    -- Scrollbar
+    local listScrollBar = CreateFrame("Slider", nil, listFrame, "BackdropTemplate")
+    listScrollBar:SetWidth(5)
+    listScrollBar:SetPoint("TOPRIGHT", -3, -3)
+    listScrollBar:SetPoint("BOTTOMRIGHT", -3, 3)
+    listScrollBar:SetBackdrop(BACKDROP)
+    listScrollBar:SetBackdropColor(0.035, 0.035, 0.035, 1)
+    listScrollBar:SetBackdropBorderColor(unpack(C.border))
+    listScrollBar:SetMinMaxValues(0, 1)
+    listScrollBar:SetValue(0)
+    listScrollBar:SetValueStep(1)
+    listScrollBar:SetObeyStepOnDrag(true)
+
+    local listScrollThumb = listScrollBar:CreateTexture(nil, "OVERLAY")
+    listScrollThumb:SetColorTexture(unpack(C.accentDim))
+    listScrollThumb:SetSize(5, 30)
+    listScrollBar:SetThumbTexture(listScrollThumb)
+
+    listScrollBar:SetScript("OnValueChanged", function(_, val)
+        listScroll:SetVerticalScroll(val)
+    end)
+
+    local function UpdateListScroll()
+        local contentH = #ALERT_SOUNDS * LIST_ITEM_H
+        local viewH = listScroll:GetHeight()
+        local maxS = math.max(0, contentH - viewH)
+        listScrollBar:SetMinMaxValues(0, maxS)
+        listScrollBar:SetShown(maxS > 0)
+        if contentH > 0 and viewH > 0 and contentH > viewH then
+            local track = listScrollBar:GetHeight()
+            listScrollThumb:SetHeight(math.max(20, track * (viewH / contentH)))
+        end
+    end
+
+    listFrame:SetScript("OnShow", function()
+        listScroll:SetVerticalScroll(0)
+        listScrollBar:SetValue(0)
+        C_Timer.After(0, UpdateListScroll)
+    end)
+
+    listScroll:SetScript("OnMouseWheel", function(_, delta)
+        local cur = listScrollBar:GetValue()
+        local lo, hi = listScrollBar:GetMinMaxValues()
+        listScrollBar:SetValue(math.max(lo, math.min(hi, cur - delta * LIST_ITEM_H * 3)))
+    end)
 
     local function UpdateDisplay()
         local currentID = WaffleOptionsDB[dbKey] or 11466
@@ -636,10 +909,10 @@ local function CreateSoundPicker(parent, y, dbKey)
     end
 
     for i, sound in ipairs(ALERT_SOUNDS) do
-        local item = CreateFrame("Button", nil, listFrame)
+        local item = CreateFrame("Button", nil, listContent)
         item:SetHeight(LIST_ITEM_H)
-        item:SetPoint("TOPLEFT", 2, -(i - 1) * LIST_ITEM_H - 2)
-        item:SetPoint("RIGHT", listFrame, "RIGHT", -2, 0)
+        item:SetPoint("TOPLEFT", 0, -(i - 1) * LIST_ITEM_H)
+        item:SetPoint("RIGHT", listContent, "RIGHT", 0, 0)
 
         local itemBg = item:CreateTexture(nil, "BACKGROUND")
         itemBg:SetAllPoints()
@@ -660,22 +933,13 @@ local function CreateSoundPicker(parent, y, dbKey)
         itemPlay:SetBackdropColor(0.07, 0.07, 0.07, 1)
         itemPlay:SetBackdropBorderColor(unpack(C.border))
 
-        local itemPlayIcon = itemPlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        itemPlayIcon:SetPoint("CENTER", 1, 0)
-        itemPlayIcon:SetText("|cff66cc66>|r")
+        local itemPlayIcon = itemPlay:CreateTexture(nil, "ARTWORK")
+        itemPlayIcon:SetSize(14, 14)
+        itemPlayIcon:SetPoint("CENTER")
+        itemPlayIcon:SetAtlas("chatframe-button-icon-voicechat")
 
         itemPlay:SetScript("OnClick", function()
             PlaySound(sound.id, "Master")
-        end)
-        itemPlay:SetScript("OnEnter", function(self)
-            self:SetBackdropBorderColor(unpack(C.accent))
-            itemBg:SetColorTexture(unpack(C.catHover))
-            itemText:SetTextColor(unpack(C.textBright))
-        end)
-        itemPlay:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(unpack(C.border))
-            itemBg:SetColorTexture(0, 0, 0, 0)
-            itemText:SetTextColor(unpack(C.text))
         end)
 
         item:SetScript("OnEnter", function()
@@ -694,13 +958,21 @@ local function CreateSoundPicker(parent, y, dbKey)
     end
 
     dropBtn:SetScript("OnClick", function()
-        listFrame:SetShown(not listFrame:IsShown())
+        if listFrame:IsShown() then
+            listFrame:Hide()
+        else
+            CloseAllDropdowns()
+            listFrame:ClearAllPoints()
+            listFrame:SetPoint("TOPLEFT", dropBtn, "BOTTOMLEFT", 0, -2)
+            listFrame:Show()
+        end
     end)
     dropBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
     dropBtn:SetScript("OnLeave", function(self)
         if not listFrame:IsShown() then self:SetBackdropBorderColor(unpack(C.border)) end
     end)
-    listFrame:SetScript("OnHide", function() dropBtn:SetBackdropBorderColor(unpack(C.border)) end)
+    listFrame:HookScript("OnHide", function() dropBtn:SetBackdropBorderColor(unpack(C.border)) end)
+    optionsFrame:HookScript("OnHide", function() listFrame:Hide() end)
 
     dropBtn:SetScript("OnShow", UpdateDisplay)
     UpdateDisplay()
@@ -871,249 +1143,340 @@ resetBtn:SetScript("OnClick", function() confirmOverlay:Show() end)
 -- General Section
 -------------------------------------------------
 CreateSidebarSection("General")
-CreateCategoryButton("Interface", "General")
-local generalContent = CreateContentFrame("Interface", 340)
 
-local y = CreateSectionHeader(generalContent, "Cutscenes", -PAD)
-local skipCB, y = CreateCheckbox(generalContent, "Auto-skip cutscenes", y, "skipCutscenes")
-local onlyWatchedCB, y = CreateCheckbox(generalContent, "Only skip already-watched cutscenes", y, "skipCutscenesOnlyWatched", SUB_PAD)
-
-local function UpdateOnlyWatchedState()
-    onlyWatchedCB:SetDisabled(not WaffleOptionsDB.skipCutscenes)
+do -- Interface
+    CreateCategoryButton("Interface", "General")
+    local f = CreateContentFrame("Interface", 340)
+    local y = CreateSectionHeader(f, "Cutscenes", -PAD)
+    local skipCB, y = CreateCheckbox(f, "Auto-skip cutscenes", y, "skipCutscenes")
+    local onlyWatchedCB, y = CreateCheckbox(f, "Only skip already-watched cutscenes", y, "skipCutscenesOnlyWatched", SUB_PAD)
+    local function Update() onlyWatchedCB:SetDisabled(not WaffleOptionsDB.skipCutscenes) end
+    skipCB.onChanged = Update
+    f:HookScript("OnShow", Update)
+    CreateDescription(f, "When 'only watched' is enabled, cutscenes play once then auto-skip on repeat viewings.", y - 4)
+    y = y - 36
+    y = CreateSectionHeader(f, "Talking Head", y)
+    local _, y = CreateCheckbox(f, "Hide Talking Head popups", y, "hideTalkingHead")
+    y = y - SEC_GAP
+    y = CreateSectionHeader(f, "Combat", y)
+    local _, y = CreateCheckbox(f, "Auto-hide World Map on combat start", y, "combatHideMap")
+    local _, y = CreateCheckbox(f, "Auto-close bags on combat start", y, "combatHideBags")
+    CreateDescription(f, "Automatically closes these UI panels when you enter combat to keep your screen clear.", y - 4)
 end
-skipCB.onChanged = UpdateOnlyWatchedState
-generalContent:HookScript("OnShow", UpdateOnlyWatchedState)
-CreateDescription(generalContent,
-    "When 'only watched' is enabled, cutscenes play once then auto-skip on repeat viewings.",
-    y - 4)
 
-y = y - 36
-y = CreateSectionHeader(generalContent, "Talking Head", y)
-local _, y = CreateCheckbox(generalContent, "Hide Talking Head popups", y, "hideTalkingHead")
-
-y = y - SEC_GAP
-y = CreateSectionHeader(generalContent, "Combat", y)
-local _, y = CreateCheckbox(generalContent, "Auto-hide World Map on combat start", y, "combatHideMap")
-local _, y = CreateCheckbox(generalContent, "Auto-close bags on combat start", y, "combatHideBags")
-CreateDescription(generalContent,
-    "Automatically closes these UI panels when you enter combat to keep your screen clear.",
-    y - 4)
-
--------------------------------------------------
--- Repair & Sell
--------------------------------------------------
-CreateCategoryButton("Repair & Sell", "General")
-local repairSellContent = CreateContentFrame("Repair & Sell", 360)
-
-y = CreateSectionHeader(repairSellContent, "Auto-Repair", -PAD)
-local repairEnableCB, y = CreateCheckbox(repairSellContent, "Enable Auto-Repair", y, "autoRepairEnabled")
-local repairChatCB, y = CreateCheckbox(repairSellContent, "Show repair cost in chat", y, "autoRepairChat", SUB_PAD)
-
-local function UpdateRepairChatState()
-    repairChatCB:SetDisabled(not WaffleOptionsDB.autoRepairEnabled)
+do -- Repair & Sell
+    CreateCategoryButton("Repair & Sell", "General")
+    local f = CreateContentFrame("Repair & Sell", 540)
+    local y = CreateSectionHeader(f, "Auto-Repair", -PAD)
+    local repairCB, y = CreateCheckbox(f, "Enable Auto-Repair", y, "autoRepairEnabled")
+    local repairChat, y = CreateCheckbox(f, "Show repair cost in chat", y, "autoRepairChat", SUB_PAD)
+    local function UR() repairChat:SetDisabled(not WaffleOptionsDB.autoRepairEnabled) end
+    repairCB.onChanged = UR; f:HookScript("OnShow", UR)
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Repair Mode", {
+        { label = "Guild first, then personal gold", value = "guild_first" },
+        { label = "Personal gold only", value = "personal_only" },
+    }, "autoRepairMode")
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Auto-Sell", y)
+    local sellCB, y = CreateCheckbox(f, "Enable Auto-Sell gray items", y, "autoSellEnabled")
+    local sellChat = CreateCheckbox(f, "Show sell total in chat", y, "autoSellChat", SUB_PAD)
+    local function US() sellChat:SetDisabled(not WaffleOptionsDB.autoSellEnabled) end
+    sellCB.onChanged = US; f:HookScript("OnShow", US)
+    y = y - CB_H - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Loot Confirmations", y)
+    local _, y = CreateCheckbox(f, "Auto-confirm loot roll and BoP dialogs", y, "autoConfirmLoot")
+    CreateDescription(f, "Automatically confirms Need/Greed roll dialogs and Bind-on-Pickup prompts.", y - 4)
+    y = y - 36
+    y = CreateSectionHeader(f, "Delete Confirmation", y)
+    local _, y = CreateCheckbox(f, "Auto-fill DELETE text in delete dialogs", y, "autoFillDelete")
+    CreateDescription(f, "Fills in the DELETE text automatically so you only need to click the confirm button.", y - 4)
 end
-repairEnableCB.onChanged = UpdateRepairChatState
-repairSellContent:HookScript("OnShow", UpdateRepairChatState)
 
-y = y - SEC_GAP
-local _, y = CreateRadioGroup(repairSellContent, y, "Repair Mode", {
-    { label = "Guild first, then personal gold", value = "guild_first" },
-    { label = "Personal gold only", value = "personal_only" },
-}, "autoRepairMode")
-
-y = y - SEC_GAP * 2
-y = CreateSectionHeader(repairSellContent, "Auto-Sell", y)
-local sellEnableCB, y = CreateCheckbox(repairSellContent, "Enable Auto-Sell gray items", y, "autoSellEnabled")
-local sellChatCB = CreateCheckbox(repairSellContent, "Show sell total in chat", y, "autoSellChat", SUB_PAD)
-
-local function UpdateSellChatState()
-    sellChatCB:SetDisabled(not WaffleOptionsDB.autoSellEnabled)
+do -- Mail
+    CreateCategoryButton("Mail", "General")
+    local f = CreateContentFrame("Mail", 220)
+    local y = CreateSectionHeader(f, "Auto-Collect Mail", -PAD)
+    local _, y = CreateCheckbox(f, "Enable Auto-Collect mail", y, "autoMailEnabled")
+    local _, y = CreateCheckbox(f, "Show collected gold in chat", y, "autoMailChat")
+    local _, y = CreateCheckbox(f, "Auto-delete empty mail", y, "autoMailDeleteEmpty")
+    CreateDescription(f, "Automatically collects items and gold from your mailbox when opened. COD mail is always skipped.", y - 6)
 end
-sellEnableCB.onChanged = UpdateSellChatState
-repairSellContent:HookScript("OnShow", UpdateSellChatState)
 
--------------------------------------------------
--- Mail
--------------------------------------------------
-CreateCategoryButton("Mail", "General")
-local mailContent = CreateContentFrame("Mail", 220)
-
-y = CreateSectionHeader(mailContent, "Auto-Collect Mail", -PAD)
-local _, y = CreateCheckbox(mailContent, "Enable Auto-Collect mail", y, "autoMailEnabled")
-local _, y = CreateCheckbox(mailContent, "Show collected gold in chat", y, "autoMailChat")
-local _, y = CreateCheckbox(mailContent, "Auto-delete empty mail", y, "autoMailDeleteEmpty")
-
-CreateDescription(mailContent,
-    "Automatically collects items and gold from your mailbox when opened. COD mail is always skipped.",
-    y - 6)
-
--------------------------------------------------
--- Auto-Summon
--------------------------------------------------
-CreateCategoryButton("Summon", "General")
-local summonContent = CreateContentFrame("Summon", 520)
-
-y = CreateSectionHeader(summonContent, "Auto-Summon", -PAD)
-local summonEnabledCB, y = CreateCheckbox(summonContent, "Enable Auto-Accept summons", y, "autoSummonEnabled")
-
-y = y - SEC_GAP
-y = CreateSubHeader(summonContent, "Chat on Summon Received", y)
-local receiveNote = CreateDescription(summonContent,
-    "Disabled when auto-accept is on to prevent chat spam.",
-    y)
-y = y - 16
-local receiveChatCB, y = CreateCheckbox(summonContent, "Announce when summon received", y, "autoSummonChatOnReceive")
-local _, y = CreateTextInput(summonContent, "Receive Message  ({summoner} and {location} are replaced)", y - 4, 390, "autoSummonReceiveMsg")
-
--- Link: disable receive checkbox when auto-accept is on
-local function UpdateReceiveState()
-    receiveChatCB:SetDisabled(WaffleOptionsDB.autoSummonEnabled)
+do -- Summon
+    CreateCategoryButton("Summon", "General")
+    local f = CreateContentFrame("Summon", 520)
+    local y = CreateSectionHeader(f, "Auto-Summon", -PAD)
+    local enableCB, y = CreateCheckbox(f, "Enable Auto-Accept summons", y, "autoSummonEnabled")
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Chat on Summon Received", y)
+    CreateDescription(f, "Disabled when auto-accept is on to prevent chat spam.", y)
+    y = y - 16
+    local receiveCB, y = CreateCheckbox(f, "Announce when summon received", y, "autoSummonChatOnReceive")
+    local _, y = CreateTextInput(f, "Receive Message  ({summoner} and {location} are replaced)", y - 4, 390, "autoSummonReceiveMsg")
+    local function UR() receiveCB:SetDisabled(WaffleOptionsDB.autoSummonEnabled) end
+    enableCB.onChanged = UR; f:HookScript("OnShow", UR)
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Chat on Summon Accepted", y)
+    local _, y = CreateCheckbox(f, "Announce when summon accepted", y, "autoSummonChatOnAccept")
+    local _, y = CreateTextInput(f, "Accept Message  ({summoner} and {location} are replaced)", y - 4, 390, "autoSummonAcceptMsg")
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Enable Chat Per Group Type", y)
+    local _, y = CreateCheckbox(f, "Party", y, "autoSummonChatParty")
+    local _, y = CreateCheckbox(f, "Raid", y, "autoSummonChatRaid")
+    CreateCheckbox(f, "Instance (LFG/LFR)", y, "autoSummonChatInstance")
 end
-summonEnabledCB.onChanged = UpdateReceiveState
-summonContent:HookScript("OnShow", UpdateReceiveState)
 
-y = y - SEC_GAP
-y = CreateSubHeader(summonContent, "Chat on Summon Accepted", y)
-local _, y = CreateCheckbox(summonContent, "Announce when summon accepted", y, "autoSummonChatOnAccept")
-local _, y = CreateTextInput(summonContent, "Accept Message  ({summoner} and {location} are replaced)", y - 4, 390, "autoSummonAcceptMsg")
+do -- Resurrect
+    CreateCategoryButton("Resurrect", "General")
+    local f = CreateContentFrame("Resurrect", 610)
+    local y = CreateSectionHeader(f, "Auto-Release Spirit", -PAD)
+    local _, y = CreateCheckbox(f, "Enable Auto-Release on death", y, "autoReleaseEnabled")
+    local _, y = CreateTextInput(f, "Delay (seconds)", y - 4, 120, "autoReleaseDelay")
+    CreateDescription(f, "Automatically releases your spirit on death in the open world only. Does not trigger in dungeons, raids, or PvP instances.", y - 4)
+    y = y - 36
+    y = CreateSectionHeader(f, "Auto-Resurrect", y)
+    local _, y = CreateCheckbox(f, "Auto-accept out-of-combat resurrections", y, "autoResOOCEnabled")
+    local _, y = CreateCheckbox(f, "Auto-accept combat resurrections", y, "autoResCombatEnabled")
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Chat on Resurrection Accepted", y)
+    local _, y = CreateCheckbox(f, "Announce when resurrection accepted", y, "autoResChatOnAccept")
+    local _, y = CreateTextInput(f, "Accept Message  ({caster} is replaced)", y - 4, 390, "autoResAcceptMsg")
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Enable Chat Per Group Type", y)
+    local _, y = CreateCheckbox(f, "Party", y, "autoResChatParty")
+    local _, y = CreateCheckbox(f, "Raid", y, "autoResChatRaid")
+    local _, y = CreateCheckbox(f, "Instance (LFG/LFR)", y, "autoResChatInstance")
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Combat Res Tracker", y)
+    local _, y = CreateCheckbox(f, "Announce combat resurrections in group", y, "dungeonCombatResTracker")
+    y = y - SEC_GAP
+    CreateRadioGroup(f, y, "Tracker Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonCombatResChannel")
+end
 
-y = y - SEC_GAP
-y = CreateSubHeader(summonContent, "Enable Chat Per Group Type", y)
-local _, y = CreateCheckbox(summonContent, "Party", y, "autoSummonChatParty")
-local _, y = CreateCheckbox(summonContent, "Raid", y, "autoSummonChatRaid")
-CreateCheckbox(summonContent, "Instance (LFG/LFR)", y, "autoSummonChatInstance")
+do -- Party
+    CreateCategoryButton("Party", "General")
+    local f = CreateContentFrame("Party", 620)
+    local y = CreateSectionHeader(f, "Auto-Accept Party Invites", -PAD)
+    local enableCB, y = CreateCheckbox(f, "Enable Auto-Accept party invites", y, "autoPartyEnabled")
+    local friendsCB, y = CreateCheckbox(f, "Accept from friends", y, "autoPartyFriends", SUB_PAD)
+    local guildCB, y = CreateCheckbox(f, "Accept from guildmates", y, "autoPartyGuild", SUB_PAD)
+    local function U()
+        local off = not WaffleOptionsDB.autoPartyEnabled
+        friendsCB:SetDisabled(off); guildCB:SetDisabled(off)
+    end
+    enableCB.onChanged = U; f:HookScript("OnShow", U)
+    CreateDescription(f, "Automatically accepts party invites from friends and/or guildmates. May not work in all contexts due to WoW security restrictions.", y - 4)
 
--------------------------------------------------
--- Auto-Resurrect
--------------------------------------------------
-CreateCategoryButton("Resurrect", "General")
-local resContent = CreateContentFrame("Resurrect", 420)
+    y = y - 36
+    y = CreateSectionHeader(f, "Greet on Join", y)
+    local _, y = CreateCheckbox(f, "Send a greeting when I join a group", y, "partyGreetOnJoin")
+    local _, y = CreateStringList(f, "Greetings (one is chosen at random)", y - 4, "partyGreetOnJoinMessages")
 
-y = CreateSectionHeader(resContent, "Auto-Resurrect", -PAD)
-local _, y = CreateCheckbox(resContent, "Auto-accept out-of-combat resurrections", y, "autoResOOCEnabled")
-local _, y = CreateCheckbox(resContent, "Auto-accept combat resurrections", y, "autoResCombatEnabled")
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Greet New Members", y)
+    local _, y = CreateCheckbox(f, "Send a greeting when someone joins my group", y, "partyGreetOnMemberJoin")
+    CreateStringList(f, "Greetings (one is chosen at random, {player} = their name)", y - 4, "partyGreetOnMemberJoinMessages")
+end
 
-y = y - SEC_GAP
-y = CreateSubHeader(resContent, "Chat on Resurrection Accepted", y)
-local _, y = CreateCheckbox(resContent, "Announce when resurrection accepted", y, "autoResChatOnAccept")
-local _, y = CreateTextInput(resContent, "Accept Message  ({caster} is replaced)", y - 4, 390, "autoResAcceptMsg")
+do -- Quests
+    CreateCategoryButton("Quests", "General")
+    local f = CreateContentFrame("Quests", 380)
+    local y = CreateSectionHeader(f, "Auto-Quest", -PAD)
+    local acceptCB, y = CreateCheckbox(f, "Auto-accept quests", y, "autoQuestAccept")
+    local repeatCB, y = CreateCheckbox(f, "Include repeatable quests (dailies/weeklies)", y, "autoQuestRepeatables", SUB_PAD)
+    local _, y = CreateCheckbox(f, "Auto-complete quests", y, "autoQuestComplete")
+    local function U() repeatCB:SetDisabled(not WaffleOptionsDB.autoQuestAccept) end
+    acceptCB.onChanged = U; f:HookScript("OnShow", U)
+    CreateDescription(f, "Hold Shift to temporarily disable and interact manually. Quests with multiple reward choices are never auto-completed.", y - 4)
+    y = y - 36
+    y = CreateSectionHeader(f, "Gossip Skip", y)
+    local _, y = CreateCheckbox(f, "Auto-select single-option NPC gossip", y, "autoGossipSkip")
+    CreateDescription(f, "Skips NPC dialog when there is only one gossip option (e.g., flight masters). Hold Shift to override.", y - 4)
+end
 
-y = y - SEC_GAP
-y = CreateSubHeader(resContent, "Enable Chat Per Group Type", y)
-local _, y = CreateCheckbox(resContent, "Party", y, "autoResChatParty")
-local _, y = CreateCheckbox(resContent, "Raid", y, "autoResChatRaid")
-CreateCheckbox(resContent, "Instance (LFG/LFR)", y, "autoResChatInstance")
+do -- Achievements
+    CreateCategoryButton("Achievements", "General")
+    local f = CreateContentFrame("Achievements", 600)
+    local y = CreateSectionHeader(f, "Auto-Screenshot", -PAD)
+    local enableCB, y = CreateCheckbox(f, "Enable Auto-Screenshot", y, "autoScreenshotEnabled")
+    local achieveCB, y = CreateCheckbox(f, "On achievement earned", y, "autoScreenshotAchievement", SUB_PAD)
+    local bossCB, y = CreateCheckbox(f, "On boss kill", y, "autoScreenshotBossKill", SUB_PAD)
+    local levelCB, y = CreateCheckbox(f, "On level up", y, "autoScreenshotLevelUp", SUB_PAD)
+    local chatCB, y = CreateCheckbox(f, "Show notification in chat", y, "autoScreenshotChat", SUB_PAD)
+    local _, y = CreateTextInput(f, "Delay (seconds, for UI toasts to appear)", y - 4, 120, "autoScreenshotDelay")
+    local function U()
+        local off = not WaffleOptionsDB.autoScreenshotEnabled
+        achieveCB:SetDisabled(off); bossCB:SetDisabled(off)
+        levelCB:SetDisabled(off); chatCB:SetDisabled(off)
+    end
+    enableCB.onChanged = U; f:HookScript("OnShow", U)
+
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Congratulate Achievements", y)
+    local _, y = CreateCheckbox(f, "Congratulate party members", y, "achieveGratsParty")
+    local _, y = CreateCheckbox(f, "Congratulate guild members", y, "achieveGratsGuild")
+    CreateDescription(f, "If a player is in both your party and guild, the message is sent to guild only to reduce spam. Uses a 10-second cooldown per player.", y - 4)
+    y = y - 36
+    CreateStringList(f, "Messages (one is chosen at random, {player} = their name)", y, "achieveGratsMessages")
+end
 
 -------------------------------------------------
 -- Dungeons & Raids Section
 -------------------------------------------------
 CreateSidebarSection("Dungeons & Raids")
 
--- Keystones sub-page
-CreateCategoryButton("Keystones", "Dungeons & Raids")
-local keystoneContent = CreateContentFrame("Keystones", 200)
-
-y = CreateSectionHeader(keystoneContent, "Keystone", -PAD)
-local _, y = CreateCheckbox(keystoneContent, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
-CreateCheckbox(keystoneContent, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
-
--- Completion Message sub-page
-CreateCategoryButton("Completion Msg", "Dungeons & Raids")
-local endDungeonContent = CreateContentFrame("Completion Msg", 340)
-
-y = CreateSectionHeader(endDungeonContent, "Completion Message", -PAD)
-local ggEnableCB, y = CreateCheckbox(endDungeonContent, "Send message on completion", y, "dungeonAutoGG")
-local ggMythicCB, y = CreateCheckbox(endDungeonContent, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
-local ggRegularCB, y = CreateCheckbox(endDungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
-local ggRaidCB, y = CreateCheckbox(endDungeonContent, "Trigger on raid boss kill", y, "dungeonGGRaidBoss", SUB_PAD)
-local ggMsgInput, y = CreateTextInput(endDungeonContent, "Message", y - 4, 390, "dungeonGGMessage")
-CreateTextInput(endDungeonContent, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
-
-local function UpdateGGState()
-    local off = not WaffleOptionsDB.dungeonAutoGG
-    ggMythicCB:SetDisabled(off)
-    ggRegularCB:SetDisabled(off)
-    ggRaidCB:SetDisabled(off)
+do -- Keystones
+    CreateCategoryButton("Keystones", "Dungeons & Raids")
+    local f = CreateContentFrame("Keystones", 440)
+    local y = CreateSectionHeader(f, "Keystone", -PAD)
+    local _, y = CreateCheckbox(f, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
+    local _, y = CreateCheckbox(f, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Key Result", y)
+    local resultCB, y = CreateCheckbox(f, "Show key upgrade/depletion result", y, "dungeonKeyResult")
+    local soundCB, y = CreateCheckbox(f, "Play alert sound on depletion", y, "dungeonKeyResultSound", SUB_PAD)
+    local _, y = CreateSoundPicker(f, y, "dungeonKeyResultSoundID")
+    y = y - SEC_GAP
+    CreateRadioGroup(f, y, "Result Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonKeyResultChannel")
+    local function U() soundCB:SetDisabled(not WaffleOptionsDB.dungeonKeyResult) end
+    resultCB.onChanged = U; f:HookScript("OnShow", U)
 end
-ggEnableCB.onChanged = UpdateGGState
-endDungeonContent:HookScript("OnShow", UpdateGGState)
 
--- Spec & Talents sub-page
-CreateCategoryButton("Spec & Talents", "Dungeons & Raids")
-local specTalentsContent = CreateContentFrame("Spec & Talents", 560)
-
-y = CreateSectionHeader(specTalentsContent, "Spec Reminder", -PAD)
-local _, y = CreateCheckbox(specTalentsContent, "Remind current spec on zone entry", y, "dungeonSpecReminder")
-local _, y = CreateCheckbox(specTalentsContent, "Show active talent loadout name", y, "dungeonSpecShowLoadout", SUB_PAD)
-local _, y = CreateCheckbox(specTalentsContent, "Trigger in mythic dungeons", y, "dungeonSpecReminderDungeon", SUB_PAD)
-local _, y = CreateCheckbox(specTalentsContent, "Trigger in raids", y, "dungeonSpecReminderRaid", SUB_PAD)
-y = y - SEC_GAP
-local _, y = CreateRadioGroup(specTalentsContent, y, "Spec Reminder Channel", {
-    { label = "Print (local chat only)", value = "print" },
-    { label = "Emote", value = "emote" },
-    { label = "Party / Raid / Instance", value = "group" },
-}, "dungeonSpecReminderChannel")
-
-y = y - SEC_GAP * 2
-y = CreateSectionHeader(specTalentsContent, "Unspent Talents Warning", y)
-local unspentCB, y = CreateCheckbox(specTalentsContent, "Warn about unspent talents on zone entry", y, "dungeonUnspentWarning")
-local unspentSoundCB, y = CreateCheckbox(specTalentsContent, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
-local _, y = CreateSoundPicker(specTalentsContent, y, "dungeonUnspentSoundID")
-y = y - SEC_GAP
-CreateRadioGroup(specTalentsContent, y, "Warning Channel", {
-    { label = "Print (local chat only)", value = "print" },
-    { label = "Emote", value = "emote" },
-    { label = "Party / Raid / Instance", value = "group" },
-}, "dungeonUnspentChannel")
-
-local function UpdateUnspentSoundState()
-    unspentSoundCB:SetDisabled(not WaffleOptionsDB.dungeonUnspentWarning)
+do -- Completion Message
+    CreateCategoryButton("Completion Msg", "Dungeons & Raids")
+    local f = CreateContentFrame("Completion Msg", 520)
+    local y = CreateSectionHeader(f, "Completion Message", -PAD)
+    local ggCB, y = CreateCheckbox(f, "Send message on completion", y, "dungeonAutoGG")
+    local ggM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
+    local ggR, y = CreateCheckbox(f, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
+    local ggRaid, y = CreateCheckbox(f, "Trigger on raid boss kill", y, "dungeonGGRaidBoss", SUB_PAD)
+    local _, y = CreateTextInput(f, "Message", y - 4, 390, "dungeonGGMessage")
+    local _, y = CreateTextInput(f, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
+    local function UG()
+        local off = not WaffleOptionsDB.dungeonAutoGG
+        ggM:SetDisabled(off); ggR:SetDisabled(off); ggRaid:SetDisabled(off)
+    end
+    ggCB.onChanged = UG; f:HookScript("OnShow", UG)
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Auto-Leave Instance", y)
+    local leaveCB, y = CreateCheckbox(f, "Automatically leave group after completion", y, "autoLeaveEnabled")
+    local leaveM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "autoLeaveMythicPlus", SUB_PAD)
+    local leaveR, y = CreateCheckbox(f, "Trigger on regular dungeon completion", y, "autoLeaveRegular", SUB_PAD)
+    local _, y = CreateTextInput(f, "Delay (seconds)", y - 4, 120, "autoLeaveDelay")
+    CreateDescription(f, "Type /wafflecancel to abort the auto-leave countdown. Disabled by default for safety.", y - 4)
+    local function UL()
+        local off = not WaffleOptionsDB.autoLeaveEnabled
+        leaveM:SetDisabled(off); leaveR:SetDisabled(off)
+    end
+    leaveCB.onChanged = UL; f:HookScript("OnShow", UL)
 end
-unspentCB.onChanged = UpdateUnspentSoundState
-specTalentsContent:HookScript("OnShow", UpdateUnspentSoundState)
 
--- Ready Check sub-page
-CreateCategoryButton("Ready Check", "Dungeons & Raids")
-local readyCheckContent = CreateContentFrame("Ready Check", 350)
-
-y = CreateSectionHeader(readyCheckContent, "Ready Check Buffs", -PAD)
-local buffCheckCB, y = CreateCheckbox(readyCheckContent, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
-
-y = y - SEC_GAP
-local _, y = CreateRadioGroup(readyCheckContent, y, "Announcement Mode", {
-    { label = "Personal (local chat only)", value = "personal" },
-    { label = "Announce to group chat", value = "party" },
-}, "dungeonBuffCheckMode")
-
-y = y - SEC_GAP
-y = CreateSubHeader(readyCheckContent, "Buffs to Check", y)
-local buffClassCB, y = CreateCheckbox(readyCheckContent, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
-local buffFoodCB, y = CreateCheckbox(readyCheckContent, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)
-local buffFlaskCB = CreateCheckbox(readyCheckContent, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
-
-local function UpdateBuffCheckState()
-    local off = not WaffleOptionsDB.dungeonReadyCheckBuffs
-    buffClassCB:SetDisabled(off)
-    buffFoodCB:SetDisabled(off)
-    buffFlaskCB:SetDisabled(off)
+do -- Spec & Talents
+    CreateCategoryButton("Spec & Talents", "Dungeons & Raids")
+    local f = CreateContentFrame("Spec & Talents", 740)
+    local y = CreateSectionHeader(f, "Spec Reminder", -PAD)
+    local _, y = CreateCheckbox(f, "Remind current spec on zone entry", y, "dungeonSpecReminder")
+    local _, y = CreateCheckbox(f, "Show active talent loadout name", y, "dungeonSpecShowLoadout", SUB_PAD)
+    local _, y = CreateCheckbox(f, "Trigger in mythic dungeons", y, "dungeonSpecReminderDungeon", SUB_PAD)
+    local _, y = CreateCheckbox(f, "Trigger in raids", y, "dungeonSpecReminderRaid", SUB_PAD)
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Spec Reminder Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonSpecReminderChannel")
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Unspent Talents Warning", y)
+    local unspentCB, y = CreateCheckbox(f, "Warn about unspent talents on zone entry", y, "dungeonUnspentWarning")
+    local unspentSound, y = CreateCheckbox(f, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
+    local _, y = CreateSoundPicker(f, y, "dungeonUnspentSoundID")
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Warning Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonUnspentChannel")
+    local function UU() unspentSound:SetDisabled(not WaffleOptionsDB.dungeonUnspentWarning) end
+    unspentCB.onChanged = UU; f:HookScript("OnShow", UU)
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Loot Spec Warning", y)
+    local lootCB, y = CreateCheckbox(f, "Warn if loot spec differs from active spec", y, "dungeonLootSpecWarning")
+    local lootSound, y = CreateCheckbox(f, "Play alert sound", y, "dungeonLootSpecSound", SUB_PAD)
+    local _, y = CreateSoundPicker(f, y, "dungeonLootSpecSoundID")
+    y = y - SEC_GAP
+    CreateRadioGroup(f, y, "Loot Spec Warning Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonLootSpecChannel")
+    local function ULS() lootSound:SetDisabled(not WaffleOptionsDB.dungeonLootSpecWarning) end
+    lootCB.onChanged = ULS; f:HookScript("OnShow", ULS)
 end
-buffCheckCB.onChanged = UpdateBuffCheckState
-readyCheckContent:HookScript("OnShow", UpdateBuffCheckState)
 
--- Announcements sub-page
-CreateCategoryButton("Announcements", "Dungeons & Raids")
-local announceContent = CreateContentFrame("Announcements", 300)
+do -- Ready Check
+    CreateCategoryButton("Ready Check", "Dungeons & Raids")
+    local f = CreateContentFrame("Ready Check", 430)
+    local y = CreateSectionHeader(f, "Ready Check Buffs", -PAD)
+    local buffCB, y = CreateCheckbox(f, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Announcement Mode", {
+        { label = "Personal (local chat only)", value = "personal" },
+        { label = "Announce to group chat", value = "party" },
+    }, "dungeonBuffCheckMode")
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Buffs to Check", y)
+    local classCB, y = CreateCheckbox(f, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
+    local foodCB, y = CreateCheckbox(f, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)
+    local flaskCB = CreateCheckbox(f, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
+    local function U()
+        local off = not WaffleOptionsDB.dungeonReadyCheckBuffs
+        classCB:SetDisabled(off); foodCB:SetDisabled(off); flaskCB:SetDisabled(off)
+    end
+    buffCB.onChanged = U; f:HookScript("OnShow", U)
+    y = y - CB_H - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Role Check", y)
+    local _, y = CreateCheckbox(f, "Auto-confirm role check in LFG queues", y, "autoRoleCheck")
+    CreateDescription(f, "Automatically accepts role checks with your current selected role.", y - 4)
+end
 
-y = CreateSectionHeader(announceContent, "Group Announcements", -PAD)
-local _, y = CreateCheckbox(announceContent, "Announce Mage Table", y, "dungeonAnnounceMageTable")
-local _, y = CreateCheckbox(announceContent, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
-local _, y = CreateCheckbox(announceContent, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
-y = y - SEC_GAP
-CreateRadioGroup(announceContent, y, "Announcement Channel", {
-    { label = "Print (local chat only)", value = "print" },
-    { label = "Emote", value = "emote" },
-    { label = "Party / Raid / Instance", value = "group" },
-}, "dungeonAnnounceChannel")
+do -- Announcements
+    CreateCategoryButton("Announcements", "Dungeons & Raids")
+    local f = CreateContentFrame("Announcements", 300)
+    local y = CreateSectionHeader(f, "Group Announcements", -PAD)
+    local _, y = CreateCheckbox(f, "Announce Mage Table", y, "dungeonAnnounceMageTable")
+    local _, y = CreateCheckbox(f, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
+    local _, y = CreateCheckbox(f, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
+    y = y - SEC_GAP
+    CreateRadioGroup(f, y, "Announcement Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonAnnounceChannel")
+end
+
+do -- Interrupts
+    CreateCategoryButton("Interrupts", "Dungeons & Raids")
+    local f = CreateContentFrame("Interrupts", 360)
+    local y = CreateSectionHeader(f, "Interrupt Announcements", -PAD)
+    local _, y = CreateCheckbox(f, "Announce your successful interrupts", y, "dungeonInterruptAnnounce")
+    local _, y = CreateTextInput(f, "Message  ({spell} is replaced with interrupt name)", y - 4, 390, "dungeonInterruptMsg")
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonInterruptChannel")
+    CreateDescription(f, "Announces your own interrupts only. Cannot detect group member interrupts due to WoW API restrictions.", y - 20)
+end
 
 -------------------------------------------------
 -- Default selection
