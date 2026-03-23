@@ -209,9 +209,7 @@ end)
 local categories = {}
 local contentFrames = {}
 local selectedCategory = nil
-local sidebarItems = {}      -- ordered list: {type, name, frame, section, visible}
-local sectionStates = {}     -- section name -> expanded bool
-local sidebarDividers = {}   -- divider textures to reposition
+local sidebarItems = {}      -- ordered list: {type, name, frame, section}
 
 local function SelectCategory(name)
     if selectedCategory == name then return end
@@ -242,68 +240,27 @@ local function LayoutSidebar()
             item.frame:ClearAllPoints()
             item.frame:SetPoint("TOPLEFT", 5, y)
             item.frame:SetPoint("RIGHT", sidebar, "RIGHT", -5, 0)
-            item.frame:Show()
             y = y - SIDEBAR_PITCH
         elseif item.type == "item" then
-            local expanded = item.section == nil or sectionStates[item.section]
-            if expanded then
-                item.frame:ClearAllPoints()
-                item.frame:SetPoint("TOPLEFT", 5, y)
-                item.frame:SetPoint("RIGHT", sidebar, "RIGHT", -5, 0)
-                item.frame:Show()
-                y = y - SIDEBAR_PITCH
-            else
-                item.frame:Hide()
-            end
+            item.frame:ClearAllPoints()
+            item.frame:SetPoint("TOPLEFT", 5, y)
+            item.frame:SetPoint("RIGHT", sidebar, "RIGHT", -5, 0)
+            y = y - SIDEBAR_PITCH
         end
     end
-end
-
-local function ToggleSection(sectionName)
-    sectionStates[sectionName] = not sectionStates[sectionName]
-    -- Update arrow on header
-    for _, item in ipairs(sidebarItems) do
-        if item.type == "header" and item.name == sectionName then
-            item.arrow:SetText(sectionStates[sectionName] and "v" or ">")
-            break
-        end
-    end
-    LayoutSidebar()
 end
 
 local function CreateSidebarSection(name)
-    sectionStates[name] = true -- expanded by default
+    local f = CreateFrame("Frame", nil, sidebar)
+    f:SetHeight(28)
 
-    local btn = CreateFrame("Button", nil, sidebar)
-    btn:SetHeight(28)
-
-    local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 0)
-    btn.bg = bg
-
-    local arrow = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    arrow:SetPoint("LEFT", 8, 0)
-    arrow:SetText("v")
-    arrow:SetTextColor(unpack(C.textDim))
-
-    local lbl = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lbl:SetPoint("LEFT", 20, 0)
+    local lbl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lbl:SetPoint("LEFT", 8, 0)
     lbl:SetText(name)
     lbl:SetTextColor(unpack(C.label))
 
-    btn:SetScript("OnClick", function() ToggleSection(name) end)
-    btn:SetScript("OnEnter", function()
-        bg:SetColorTexture(unpack(C.catHover))
-        lbl:SetTextColor(unpack(C.textBright))
-    end)
-    btn:SetScript("OnLeave", function()
-        bg:SetColorTexture(0, 0, 0, 0)
-        lbl:SetTextColor(unpack(C.label))
-    end)
-
-    tinsert(sidebarItems, { type = "header", name = name, frame = btn, arrow = arrow })
-    return btn
+    tinsert(sidebarItems, { type = "header", name = name, frame = f })
+    return f
 end
 
 local function CreateCategoryButton(name, section)
@@ -779,13 +736,14 @@ aboutDiv:SetPoint("RIGHT", -(PAD + 20), 0)
 aboutDiv:SetColorTexture(unpack(C.borderLight))
 
 local features = {
-    { "General",        "Cutscenes, Talking Head, Combat" },
+    { "Interface",      "Cutscenes, Talking Head, Combat" },
     { "Repair & Sell",  "Auto-repair gear and sell gray items" },
     { "Mail",           "Collects mail from your mailbox" },
     { "Summon",         "Accepts summons automatically" },
     { "Resurrect",      "Accepts resurrections automatically" },
     { "Dungeons",       "Keystones, spec reminders, buff checks" },
-    { "Announcements",  "End-of-dungeon, group utility alerts" },
+    { "Completion",     "End-of-dungeon and raid boss messages" },
+    { "Announcements",  "Group utility alerts" },
 }
 local fy = -90
 for _, feat in ipairs(features) do
@@ -913,8 +871,8 @@ resetBtn:SetScript("OnClick", function() confirmOverlay:Show() end)
 -- General Section
 -------------------------------------------------
 CreateSidebarSection("General")
-CreateCategoryButton("General", "General")
-local generalContent = CreateContentFrame("General", 340)
+CreateCategoryButton("Interface", "General")
+local generalContent = CreateContentFrame("Interface", 340)
 
 local y = CreateSectionHeader(generalContent, "Cutscenes", -PAD)
 local skipCB, y = CreateCheckbox(generalContent, "Auto-skip cutscenes", y, "skipCutscenes")
@@ -1059,14 +1017,15 @@ y = CreateSectionHeader(keystoneContent, "Keystone", -PAD)
 local _, y = CreateCheckbox(keystoneContent, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
 CreateCheckbox(keystoneContent, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
 
--- End of Dungeon sub-page
-CreateCategoryButton("End of Dungeon", "Dungeons & Raids")
-local endDungeonContent = CreateContentFrame("End of Dungeon", 300)
+-- Completion Message sub-page
+CreateCategoryButton("Completion Msg", "Dungeons & Raids")
+local endDungeonContent = CreateContentFrame("Completion Msg", 340)
 
-y = CreateSectionHeader(endDungeonContent, "End of Dungeon Message", -PAD)
-local ggEnableCB, y = CreateCheckbox(endDungeonContent, "Send message at end of dungeon", y, "dungeonAutoGG")
+y = CreateSectionHeader(endDungeonContent, "Completion Message", -PAD)
+local ggEnableCB, y = CreateCheckbox(endDungeonContent, "Send message on completion", y, "dungeonAutoGG")
 local ggMythicCB, y = CreateCheckbox(endDungeonContent, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
 local ggRegularCB, y = CreateCheckbox(endDungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
+local ggRaidCB, y = CreateCheckbox(endDungeonContent, "Trigger on raid boss kill", y, "dungeonGGRaidBoss", SUB_PAD)
 local ggMsgInput, y = CreateTextInput(endDungeonContent, "Message", y - 4, 390, "dungeonGGMessage")
 CreateTextInput(endDungeonContent, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
 
@@ -1074,17 +1033,20 @@ local function UpdateGGState()
     local off = not WaffleOptionsDB.dungeonAutoGG
     ggMythicCB:SetDisabled(off)
     ggRegularCB:SetDisabled(off)
+    ggRaidCB:SetDisabled(off)
 end
 ggEnableCB.onChanged = UpdateGGState
 endDungeonContent:HookScript("OnShow", UpdateGGState)
 
 -- Spec & Talents sub-page
 CreateCategoryButton("Spec & Talents", "Dungeons & Raids")
-local specTalentsContent = CreateContentFrame("Spec & Talents", 500)
+local specTalentsContent = CreateContentFrame("Spec & Talents", 560)
 
 y = CreateSectionHeader(specTalentsContent, "Spec Reminder", -PAD)
-local _, y = CreateCheckbox(specTalentsContent, "Remind current spec when entering a mythic dungeon", y, "dungeonSpecReminder")
+local _, y = CreateCheckbox(specTalentsContent, "Remind current spec on zone entry", y, "dungeonSpecReminder")
 local _, y = CreateCheckbox(specTalentsContent, "Show active talent loadout name", y, "dungeonSpecShowLoadout", SUB_PAD)
+local _, y = CreateCheckbox(specTalentsContent, "Trigger in mythic dungeons", y, "dungeonSpecReminderDungeon", SUB_PAD)
+local _, y = CreateCheckbox(specTalentsContent, "Trigger in raids", y, "dungeonSpecReminderRaid", SUB_PAD)
 y = y - SEC_GAP
 local _, y = CreateRadioGroup(specTalentsContent, y, "Spec Reminder Channel", {
     { label = "Print (local chat only)", value = "print" },
@@ -1094,7 +1056,7 @@ local _, y = CreateRadioGroup(specTalentsContent, y, "Spec Reminder Channel", {
 
 y = y - SEC_GAP * 2
 y = CreateSectionHeader(specTalentsContent, "Unspent Talents Warning", y)
-local unspentCB, y = CreateCheckbox(specTalentsContent, "Warn about unspent talents when entering a mythic dungeon", y, "dungeonUnspentWarning")
+local unspentCB, y = CreateCheckbox(specTalentsContent, "Warn about unspent talents on zone entry", y, "dungeonUnspentWarning")
 local unspentSoundCB, y = CreateCheckbox(specTalentsContent, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
 local _, y = CreateSoundPicker(specTalentsContent, y, "dungeonUnspentSoundID")
 y = y - SEC_GAP

@@ -21,9 +21,9 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 
 - Opened with `/waffle` slash command
 - Custom frame with dark theme, green accents, draggable, closes with Escape
-- Left sidebar has collapsible section headers with category sub-items; right side shows settings for the selected category
-- Sidebar uses dynamic layout: `sidebarItems` ordered list + `LayoutSidebar()` repositions all items when sections collapse/expand
-- `CreateSidebarSection(name)` creates a collapsible header; `CreateCategoryButton(name, section)` creates a category item under a section (or top-level if section is nil)
+- Left sidebar has section headers (non-interactive labels) with category sub-items; right side shows settings for the selected category
+- Sidebar uses dynamic layout: `sidebarItems` ordered list + `LayoutSidebar()` positions all items
+- `CreateSidebarSection(name)` creates a static section header label; `CreateCategoryButton(name, section)` creates a category item under a section (or top-level if section is nil)
 - Sections: "General" (General, Repair & Sell, Mail, Summon, Resurrect) and "Dungeons & Raids" (Keystones, End of Dungeon, Spec & Talents, Ready Check, Announcements)
 - Helper functions `CreateCheckbox`, `CreateRadioGroup`, and `CreateTextInput` are used to build settings UI tied to `WaffleOptionsDB` keys
 - When adding a new category: use `CreateCategoryButton(name, section)` and `CreateContentFrame(name)`, then populate the content frame with controls
@@ -103,25 +103,28 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 ### Dungeon (split across 5 sub-pages: Keystones, End of Dungeon, Spec & Talents, Ready Check, Announcements)
 - **M+ Key Reminder:** Listens for `GROUP_JOINED`, uses `C_LFGList.GetActiveEntryInfo()` / `C_LFGList.GetSearchResultInfo()` + `C_LFGList.GetActivityInfoTable()` to get group's listed key. Delayed 1s for API data availability.
 - **Auto-Insert Keystone:** Listens for `CHALLENGE_MODE_KEYSTONE_RECEPTACLE_OPEN`, calls `C_ChallengeMode.SlotKeystone()` after 0.3s delay.
-- **End of Dungeon Message:** `CHALLENGE_MODE_COMPLETED` (M+) and `LFG_COMPLETION_REWARD` (regular). Sends customizable message to group chat via `GetGroupChatChannel()` with configurable delay via `C_Timer.After`.
-- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `IsInMythicDungeon()` (mythic difficulty via `GetDifficultyInfo()` OR active challenge mode). Shows current spec via `GetSpecializationInfo()`. Optionally shows active loadout name via `C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional alert sound. Logic extracted into `RunSpecAndTalentCheck()` for reuse by `/waffletest`.
+- **Completion Message:** `CHALLENGE_MODE_COMPLETED` (M+), `LFG_COMPLETION_REWARD` (regular dungeons), and `ENCOUNTER_END` (raid boss kills, filtered to success=1 and instanceType="raid"). Sends customizable message to group chat via `GetGroupChatChannel()` with configurable delay via `C_Timer.After`.
+- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `IsInMythicDungeon()` or `IsInRaidInstance()` based on user toggles. Shows current spec via `GetSpecializationInfo()`. Optionally shows active loadout name via `C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional alert sound. Logic extracted into `RunSpecAndTalentCheck()` for reuse by `/waffletest`. Separately toggleable for dungeons and raids.
 - **Ready Check Buffs:** `READY_CHECK` event. Scans party classes via `UnitClass()`. Checks player for class buffs (Intellect 1459, Fortitude 21562, Battle Shout 6673, MotW 1126, Bronze 381748), food (Well Fed aura name match), flask (Phial/Flask aura name match) via `C_UnitAuras.GetBuffDataByIndex()`. Personal or group chat mode.
 - **Group Announcements:** `COMBAT_LOG_EVENT_UNFILTERED` event, filters for `SPELL_CREATE` subEvent. Announces when a group member places a Mage Table (spell 190336), Warlock Summoning Stone (spell 698), or a feast/buffet (table of known feast spell IDs). Each type independently toggleable. Uses `SendToChannel()` with configurable channel (print/emote/group).
 - **Options (WaffleOptionsDB keys):**
   - `dungeonKeyReminder` (bool, default: true) — Show group key info on join
   - `dungeonAutoInsertKey` (bool, default: true) — Auto-slot keystone
-  - `dungeonAutoGG` (bool, default: false) — Master toggle for end-of-dungeon message
+  - `dungeonAutoGG` (bool, default: false) — Master toggle for completion message
   - `dungeonGGMessage` (string, default: "gg") — Customizable message
   - `dungeonGGDelay` (number, default: 0) — Delay in seconds
   - `dungeonGGMythicPlus` (bool, default: true) — Trigger on M+ completion
   - `dungeonGGRegular` (bool, default: true) — Trigger on regular dungeons
-  - `dungeonSpecReminder` (bool, default: true) — Spec/talent reminder in dungeons
+  - `dungeonGGRaidBoss` (bool, default: false) — Trigger on raid boss kill
+  - `dungeonSpecReminder` (bool, default: true) — Master toggle for spec reminder on zone entry
   - `dungeonSpecShowLoadout` (bool, default: true) — Show active talent loadout name in spec reminder
+  - `dungeonSpecReminderDungeon` (bool, default: true) — Trigger spec reminder in mythic dungeons
+  - `dungeonSpecReminderRaid` (bool, default: true) — Trigger spec reminder in raids
   - `dungeonSpecReminderChannel` (string, default: "print") — Channel for spec reminder
-  - `dungeonUnspentWarning` (bool, default: true) — Warn about unspent talent points
+  - `dungeonUnspentWarning` (bool, default: true) — Warn about unspent talent points on zone entry
   - `dungeonUnspentChannel` (string, default: "print") — Channel for unspent warning
-  - `dungeonSpecReminderSound` (bool, default: true) — Alert sound for unspent talents
-  - `dungeonSpecReminderSoundID` (number, default: 37666) — Sound ID ("You are not prepared")
+  - `dungeonUnspentSound` (bool, default: true) — Alert sound for unspent talents
+  - `dungeonUnspentSoundID` (number, default: 11466) — Sound ID ("You are not prepared")
   - `dungeonReadyCheckBuffs` (bool, default: true) — Buff check on ready check
   - `dungeonBuffCheckMode` (string, default: "personal") — "personal" or "party"
   - `dungeonBuffCheckClassBuffs` (bool, default: true) — Check class buffs

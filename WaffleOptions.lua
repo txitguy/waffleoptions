@@ -40,9 +40,12 @@ local defaults = {
     dungeonGGDelay = 4,
     dungeonGGMythicPlus = true,
     dungeonGGRegular = true,
+    dungeonGGRaidBoss = false,
     dungeonSpecReminder = true,
     dungeonSpecShowLoadout = true,
     dungeonSpecReminderChannel = "print",
+    dungeonSpecReminderDungeon = true,
+    dungeonSpecReminderRaid = true,
     dungeonUnspentWarning = true,
     dungeonUnspentChannel = "print",
     dungeonUnspentSound = true,
@@ -418,6 +421,15 @@ local function HandleDungeonComplete()
     end
 end
 
+local function HandleEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
+    if success ~= 1 then return end
+    if not WaffleOptionsDB.dungeonGGRaidBoss then return end
+    -- Only trigger in raid instances
+    local _, instanceType = GetInstanceInfo()
+    if instanceType ~= "raid" then return end
+    SendDungeonGG()
+end
+
 -- Dungeon: Send message to a specific channel
 local function SendToChannel(channelSetting, msg)
     if channelSetting == "print" then
@@ -437,12 +449,17 @@ local function SendToChannel(channelSetting, msg)
     end
 end
 
--- Dungeon: Spec/talent reminder
+-- Dungeon/Raid: Spec/talent reminder
 local function IsInMythicDungeon()
     local _, instanceType, difficultyID = GetInstanceInfo()
     if instanceType ~= "party" then return false end
     -- Mythic (M0) = 23, Mythic Keystone (M+) = 8
     return difficultyID == 23 or difficultyID == 8
+end
+
+local function IsInRaidInstance()
+    local _, instanceType = GetInstanceInfo()
+    return instanceType == "raid"
 end
 
 local function RunSpecAndTalentCheck()
@@ -558,8 +575,13 @@ end
 
 local function HandleZoneChanged()
     C_Timer.After(1, function()
-        if not IsInMythicDungeon() then return end
-        RunSpecAndTalentCheck()
+        local inDungeon = IsInMythicDungeon()
+        local inRaid = IsInRaidInstance()
+        if inDungeon and WaffleOptionsDB.dungeonSpecReminderDungeon then
+            RunSpecAndTalentCheck()
+        elseif inRaid and WaffleOptionsDB.dungeonSpecReminderRaid then
+            RunSpecAndTalentCheck()
+        end
     end)
 end
 
@@ -721,10 +743,12 @@ frame:RegisterEvent("TALKINGHEAD_REQUESTED")
 frame:RegisterEvent("GROUP_JOINED")
 frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
 frame:RegisterEvent("LFG_COMPLETION_REWARD")
+frame:RegisterEvent("ENCOUNTER_END")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("READY_CHECK")
 frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
+frame:SetScript("OnEvent", function(self, event, ...)
+    local arg1, arg2, arg3, arg4, arg5 = ...
     if event == "ADDON_LOADED" then
         if arg1 == addonName then
             InitDB()
@@ -758,6 +782,8 @@ frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         HandleMythicPlusComplete()
     elseif event == "LFG_COMPLETION_REWARD" then
         HandleDungeonComplete()
+    elseif event == "ENCOUNTER_END" then
+        HandleEncounterEnd(arg1, arg2, arg3, arg4, arg5)
     elseif event == "ZONE_CHANGED_NEW_AREA" then
         HandleZoneChanged()
     elseif event == "READY_CHECK" then
