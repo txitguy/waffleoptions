@@ -1442,6 +1442,10 @@ end)
 -- Slash command
 SLASH_WAFFLEMATIONS1 = "/waffle"
 SlashCmdList["WAFFLEMATIONS"] = function()
+    if InCombatLockdown() then
+        print("|cff88cc88[WaffleOptions]|r Options panel cannot be opened during combat.")
+        return
+    end
     if WaffleOptions.ToggleOptions then
         WaffleOptions.ToggleOptions()
     end
