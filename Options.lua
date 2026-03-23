@@ -513,6 +513,206 @@ local function CreateTextInput(parent, label, y, width, dbKey)
     return box, y - 46
 end
 
+-------------------------------------------------
+-- Helper: Sound picker (dropdown + play button)
+-------------------------------------------------
+-- Build full sound list from SOUNDKIT, sorted alphabetically
+local ALERT_SOUNDS = {}
+for key, id in pairs(SOUNDKIT) do
+    if type(id) == "number" and type(key) == "string" then
+        -- Format: RAID_WARNING → Raid Warning
+        local label = key:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b:lower() end)
+        tinsert(ALERT_SOUNDS, { id = id, name = label, key = key })
+    end
+end
+table.sort(ALERT_SOUNDS, function(a, b) return a.name < b.name end)
+
+local function CreateSoundPicker(parent, y, dbKey)
+    local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lbl:SetPoint("TOPLEFT", SUB_PAD, y)
+    lbl:SetText("Alert Sound")
+    lbl:SetTextColor(unpack(C.label))
+
+    -- Dropdown toggle button
+    local dropBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    dropBtn:SetSize(200, 24)
+    dropBtn:SetPoint("TOPLEFT", SUB_PAD, y - 16)
+    dropBtn:SetBackdrop(BACKDROP)
+    dropBtn:SetBackdropColor(0.06, 0.06, 0.06, 1)
+    dropBtn:SetBackdropBorderColor(unpack(C.border))
+
+    local dropText = dropBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    dropText:SetPoint("LEFT", 8, 0)
+    dropText:SetTextColor(unpack(C.text))
+
+    local dropArrow = dropBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    dropArrow:SetPoint("RIGHT", -8, 0)
+    dropArrow:SetText("v")
+    dropArrow:SetTextColor(unpack(C.textDim))
+
+    -- Play preview button
+    local playBtn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    playBtn:SetSize(50, 24)
+    playBtn:SetPoint("LEFT", dropBtn, "RIGHT", 6, 0)
+    playBtn:SetBackdrop(BACKDROP)
+    playBtn:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    playBtn:SetBackdropBorderColor(unpack(C.border))
+
+    local playText = playBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    playText:SetPoint("CENTER")
+    playText:SetText("Play")
+    playText:SetTextColor(unpack(C.accent))
+
+    playBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
+    playBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(unpack(C.border)) end)
+    playBtn:SetScript("OnClick", function()
+        PlaySound(WafflemationsDB[dbKey] or 8959, "Master")
+    end)
+
+    -- Scrollable dropdown list
+    local LIST_ITEM_H = 22
+    local LIST_VISIBLE = 12
+    local LIST_H = LIST_VISIBLE * LIST_ITEM_H + 4
+
+    local listFrame = CreateFrame("Frame", nil, dropBtn, "BackdropTemplate")
+    listFrame:SetPoint("TOPLEFT", dropBtn, "BOTTOMLEFT", 0, -2)
+    listFrame:SetSize(300, LIST_H)
+    listFrame:SetBackdrop(BACKDROP)
+    listFrame:SetBackdropColor(0.04, 0.04, 0.04, 0.98)
+    listFrame:SetBackdropBorderColor(unpack(C.border))
+    listFrame:SetFrameStrata("TOOLTIP")
+    listFrame:Hide()
+
+    -- Scroll frame inside list
+    local listScroll = CreateFrame("ScrollFrame", nil, listFrame)
+    listScroll:SetPoint("TOPLEFT", 2, -2)
+    listScroll:SetPoint("BOTTOMRIGHT", -9, 2)
+
+    local listChild = CreateFrame("Frame", nil, listScroll)
+    listChild:SetWidth(289)
+    listChild:SetHeight(#ALERT_SOUNDS * LIST_ITEM_H)
+    listScroll:SetScrollChild(listChild)
+
+    -- List scrollbar
+    local listBar = CreateFrame("Slider", nil, listFrame, "BackdropTemplate")
+    listBar:SetWidth(5)
+    listBar:SetPoint("TOPRIGHT", -2, -2)
+    listBar:SetPoint("BOTTOMRIGHT", -2, 2)
+    listBar:SetBackdrop(BACKDROP)
+    listBar:SetBackdropColor(0.03, 0.03, 0.03, 1)
+    listBar:SetBackdropBorderColor(unpack(C.border))
+    local maxListScroll = math.max(0, #ALERT_SOUNDS * LIST_ITEM_H - (LIST_H - 4))
+    listBar:SetMinMaxValues(0, maxListScroll)
+    listBar:SetValue(0)
+    listBar:SetValueStep(1)
+    listBar:SetObeyStepOnDrag(true)
+
+    local listThumb = listBar:CreateTexture(nil, "OVERLAY")
+    listThumb:SetColorTexture(unpack(C.accentDim))
+    local trackH = LIST_H - 4
+    local totalH = #ALERT_SOUNDS * LIST_ITEM_H
+    listThumb:SetSize(5, totalH > 0 and math.max(20, trackH * (trackH / totalH)) or 40)
+    listBar:SetThumbTexture(listThumb)
+
+    listBar:SetScript("OnValueChanged", function(_, val)
+        listScroll:SetVerticalScroll(val)
+    end)
+    listScroll:EnableMouseWheel(true)
+    listScroll:SetScript("OnMouseWheel", function(_, delta)
+        local cur = listBar:GetValue()
+        local lo, hi = listBar:GetMinMaxValues()
+        listBar:SetValue(math.max(lo, math.min(hi, cur - delta * LIST_ITEM_H * 3)))
+    end)
+
+    local function UpdateDisplay()
+        local currentID = WafflemationsDB[dbKey] or 8959
+        for _, s in ipairs(ALERT_SOUNDS) do
+            if s.id == currentID then
+                dropText:SetText(s.name)
+                return
+            end
+        end
+        dropText:SetText("Sound #" .. currentID)
+    end
+
+    for i, sound in ipairs(ALERT_SOUNDS) do
+        local item = CreateFrame("Button", nil, listChild)
+        item:SetHeight(LIST_ITEM_H)
+        item:SetPoint("TOPLEFT", 0, -(i - 1) * LIST_ITEM_H)
+        item:SetPoint("RIGHT", listChild, "RIGHT", 0, 0)
+
+        local itemBg = item:CreateTexture(nil, "BACKGROUND")
+        itemBg:SetAllPoints()
+        itemBg:SetColorTexture(0, 0, 0, 0)
+
+        local itemText = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        itemText:SetPoint("LEFT", 8, 0)
+        itemText:SetPoint("RIGHT", item, "RIGHT", -30, 0)
+        itemText:SetJustifyH("LEFT")
+        itemText:SetText(sound.name)
+        itemText:SetTextColor(unpack(C.text))
+
+        -- Play button per row
+        local itemPlay = CreateFrame("Button", nil, item, "BackdropTemplate")
+        itemPlay:SetSize(22, 18)
+        itemPlay:SetPoint("RIGHT", -4, 0)
+        itemPlay:SetBackdrop(BACKDROP)
+        itemPlay:SetBackdropColor(0.07, 0.07, 0.07, 1)
+        itemPlay:SetBackdropBorderColor(unpack(C.border))
+
+        local itemPlayIcon = itemPlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        itemPlayIcon:SetPoint("CENTER", 1, 0)
+        itemPlayIcon:SetText("|cff66cc66>|r")
+
+        itemPlay:SetScript("OnClick", function()
+            PlaySound(sound.id, "Master")
+        end)
+        itemPlay:SetScript("OnEnter", function(self)
+            self:SetBackdropBorderColor(unpack(C.accent))
+            itemBg:SetColorTexture(unpack(C.catHover))
+            itemText:SetTextColor(unpack(C.textBright))
+        end)
+        itemPlay:SetScript("OnLeave", function(self)
+            self:SetBackdropBorderColor(unpack(C.border))
+            itemBg:SetColorTexture(0, 0, 0, 0)
+            itemText:SetTextColor(unpack(C.text))
+        end)
+
+        item:SetScript("OnEnter", function()
+            itemBg:SetColorTexture(unpack(C.catHover))
+            itemText:SetTextColor(unpack(C.textBright))
+        end)
+        item:SetScript("OnLeave", function()
+            itemBg:SetColorTexture(0, 0, 0, 0)
+            itemText:SetTextColor(unpack(C.text))
+        end)
+        item:SetScript("OnClick", function()
+            WafflemationsDB[dbKey] = sound.id
+            UpdateDisplay()
+            listFrame:Hide()
+        end)
+    end
+
+    dropBtn:SetScript("OnClick", function()
+        if listFrame:IsShown() then
+            listFrame:Hide()
+        else
+            listBar:SetValue(0)
+            listFrame:Show()
+        end
+    end)
+    dropBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
+    dropBtn:SetScript("OnLeave", function(self)
+        if not listFrame:IsShown() then self:SetBackdropBorderColor(unpack(C.border)) end
+    end)
+    listFrame:SetScript("OnHide", function() dropBtn:SetBackdropBorderColor(unpack(C.border)) end)
+
+    dropBtn:SetScript("OnShow", UpdateDisplay)
+    UpdateDisplay()
+
+    return dropBtn, y - 48
+end
+
 --=========================================================
 --  CATEGORIES
 --=========================================================
@@ -546,6 +746,7 @@ local features = {
     { "Mail",           "Collects mail from your mailbox" },
     { "Summon",         "Accepts summons automatically" },
     { "Resurrect",      "Accepts resurrections automatically" },
+    { "Dungeon",        "M+ keys, end-of-dungeon, buff checks" },
 }
 local fy = -90
 for _, feat in ipairs(features) do
@@ -804,6 +1005,90 @@ y = CreateSubHeader(resContent, "Enable Chat Per Group Type", y)
 local _, y = CreateCheckbox(resContent, "Party", y, "autoResChatParty")
 local _, y = CreateCheckbox(resContent, "Raid", y, "autoResChatRaid")
 CreateCheckbox(resContent, "Instance (LFG/LFR)", y, "autoResChatInstance")
+
+-------------------------------------------------
+-- Dungeon
+-------------------------------------------------
+CreateCategoryButton("Dungeon", 7)
+local dungeonContent = CreateContentFrame("Dungeon", 900)
+
+-- Keystone section
+y = CreateSectionHeader(dungeonContent, "Keystone", -PAD)
+local _, y = CreateCheckbox(dungeonContent, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
+local _, y = CreateCheckbox(dungeonContent, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
+
+-- End of Dungeon section
+y = y - SEC_GAP * 2
+y = CreateSectionHeader(dungeonContent, "End of Dungeon", y)
+local ggEnableCB, y = CreateCheckbox(dungeonContent, "Send message at end of dungeon", y, "dungeonAutoGG")
+local ggMsgInput, y = CreateTextInput(dungeonContent, "Message", y - 4, 390, "dungeonGGMessage")
+local ggDelayInput, y = CreateTextInput(dungeonContent, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
+local ggMythicCB, y = CreateCheckbox(dungeonContent, "Trigger on M+ completion", y - 4, "dungeonGGMythicPlus", SUB_PAD)
+local ggRegularCB, y = CreateCheckbox(dungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
+
+local function UpdateGGState()
+    local off = not WafflemationsDB.dungeonAutoGG
+    ggMythicCB:SetDisabled(off)
+    ggRegularCB:SetDisabled(off)
+end
+ggEnableCB.onChanged = UpdateGGState
+dungeonContent:HookScript("OnShow", UpdateGGState)
+
+-- Spec Reminder section
+y = y - SEC_GAP * 2
+y = CreateSectionHeader(dungeonContent, "Spec Reminder", y)
+local _, y = CreateCheckbox(dungeonContent, "Remind current spec when entering M+", y, "dungeonSpecReminder")
+y = y - SEC_GAP
+local _, y = CreateRadioGroup(dungeonContent, y, "Spec Reminder Channel", {
+    { label = "Print (local chat only)", value = "print" },
+    { label = "Emote", value = "emote" },
+    { label = "Party / Raid / Instance", value = "group" },
+}, "dungeonSpecReminderChannel")
+
+-- Unspent Talents Warning section
+y = y - SEC_GAP * 2
+y = CreateSectionHeader(dungeonContent, "Unspent Talents Warning", y)
+local unspentCB, y = CreateCheckbox(dungeonContent, "Warn about unspent talents when entering M+", y, "dungeonUnspentWarning")
+local unspentSoundCB, y = CreateCheckbox(dungeonContent, "Play alert sound", y, "dungeonUnspentSound", SUB_PAD)
+local _, y = CreateSoundPicker(dungeonContent, y, "dungeonUnspentSoundID")
+y = y - SEC_GAP
+local _, y = CreateRadioGroup(dungeonContent, y, "Warning Channel", {
+    { label = "Print (local chat only)", value = "print" },
+    { label = "Emote", value = "emote" },
+    { label = "Party / Raid / Instance", value = "group" },
+}, "dungeonUnspentChannel")
+
+local function UpdateUnspentSoundState()
+    unspentSoundCB:SetDisabled(not WafflemationsDB.dungeonUnspentWarning)
+end
+unspentCB.onChanged = UpdateUnspentSoundState
+dungeonContent:HookScript("OnShow", UpdateUnspentSoundState)
+
+-- Ready Check Buffs section
+y = y - SEC_GAP * 2
+y = CreateSectionHeader(dungeonContent, "Ready Check Buffs", y)
+local buffCheckCB, y = CreateCheckbox(dungeonContent, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
+
+y = y - SEC_GAP
+local _, y = CreateRadioGroup(dungeonContent, y, "Announcement Mode", {
+    { label = "Personal (local chat only)", value = "personal" },
+    { label = "Announce to group chat", value = "party" },
+}, "dungeonBuffCheckMode")
+
+y = y - SEC_GAP
+y = CreateSubHeader(dungeonContent, "Buffs to Check", y)
+local buffClassCB, y = CreateCheckbox(dungeonContent, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
+local buffFoodCB, y = CreateCheckbox(dungeonContent, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)
+local buffFlaskCB = CreateCheckbox(dungeonContent, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
+
+local function UpdateBuffCheckState()
+    local off = not WafflemationsDB.dungeonReadyCheckBuffs
+    buffClassCB:SetDisabled(off)
+    buffFoodCB:SetDisabled(off)
+    buffFlaskCB:SetDisabled(off)
+end
+buffCheckCB.onChanged = UpdateBuffCheckState
+dungeonContent:HookScript("OnShow", UpdateBuffCheckState)
 
 -------------------------------------------------
 -- Default selection

@@ -33,6 +33,24 @@ local defaults = {
     skipCutscenes = false,
     skipCutscenesOnlyWatched = true,
     hideTalkingHead = false,
+    dungeonKeyReminder = true,
+    dungeonAutoInsertKey = true,
+    dungeonAutoGG = true,
+    dungeonGGMessage = "gg",
+    dungeonGGDelay = 4,
+    dungeonGGMythicPlus = true,
+    dungeonGGRegular = true,
+    dungeonSpecReminder = true,
+    dungeonSpecReminderChannel = "print",
+    dungeonUnspentWarning = true,
+    dungeonUnspentChannel = "print",
+    dungeonUnspentSound = true,
+    dungeonUnspentSoundID = 8959,  -- SOUNDKIT.RAID_WARNING
+    dungeonReadyCheckBuffs = true,
+    dungeonBuffCheckMode = "personal",
+    dungeonBuffCheckClassBuffs = true,
+    dungeonBuffCheckFood = true,
+    dungeonBuffCheckFlask = true,
 }
 
 Wafflemations.defaults = defaults
@@ -323,6 +341,243 @@ local function HandleTalkingHead()
     end
 end
 
+-- Dungeon: M+ key reminder on group join
+local function HandleGroupJoined()
+    if not WafflemationsDB.dungeonKeyReminder then return end
+    C_Timer.After(1, function()
+        local activeEntry = C_LFGList.GetActiveEntryInfo()
+        if activeEntry then
+            local activityInfo = C_LFGList.GetActivityInfoTable(activeEntry.activityID)
+            if activityInfo and activityInfo.isMythicPlusActivity then
+                local mapName = activityInfo.fullName or activityInfo.shortName or "Unknown Dungeon"
+                print("|cff88cc88[Wafflemations]|r Group key: " .. mapName)
+                return
+            end
+        end
+        -- Try search result info if we applied to a group
+        local apps = C_LFGList.GetApplications()
+        if apps then
+            for _, resultID in ipairs(apps) do
+                local result = C_LFGList.GetSearchResultInfo(resultID)
+                if result and result.activityID then
+                    local activityInfo = C_LFGList.GetActivityInfoTable(result.activityID)
+                    if activityInfo and activityInfo.isMythicPlusActivity then
+                        local mapName = activityInfo.fullName or activityInfo.shortName or "Unknown Dungeon"
+                        print("|cff88cc88[Wafflemations]|r Group key: " .. mapName)
+                        return
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Dungeon: Auto-insert keystone (hook the keystone frame when it loads)
+local keystoneHooked = false
+local function SetupKeystoneAutoInsert()
+    if keystoneHooked then return end
+    if ChallengeKeystoneFrame then
+        keystoneHooked = true
+        ChallengeKeystoneFrame:HookScript("OnShow", function()
+            if not WafflemationsDB.dungeonAutoInsertKey then return end
+            C_Timer.After(0.3, function()
+                C_ChallengeMode.SlotKeystone()
+            end)
+        end)
+    end
+end
+
+-- Dungeon: End of dungeon message
+local function SendDungeonGG()
+    if not WafflemationsDB.dungeonAutoGG then return end
+    local channel = GetGroupChatChannel()
+    if not channel then return end
+    local msg = WafflemationsDB.dungeonGGMessage or "gg"
+    local delay = tonumber(WafflemationsDB.dungeonGGDelay) or 0
+    C_Timer.After(delay, function()
+        if IsInGroup() then
+            SendChatMessage(msg, channel)
+        end
+    end)
+end
+
+local function HandleMythicPlusComplete()
+    if WafflemationsDB.dungeonGGMythicPlus then
+        SendDungeonGG()
+    end
+end
+
+local function HandleDungeonComplete()
+    if WafflemationsDB.dungeonGGRegular then
+        SendDungeonGG()
+    end
+end
+
+-- Dungeon: Send message to a specific channel
+local function SendToChannel(channelSetting, msg)
+    if channelSetting == "print" then
+        print(msg)
+    elseif channelSetting == "emote" then
+        -- Strip color codes for emote
+        local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+        SendChatMessage(clean, "EMOTE")
+    elseif channelSetting == "group" then
+        local channel = GetGroupChatChannel()
+        if channel then
+            local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            SendChatMessage(clean, channel)
+        else
+            print(msg)
+        end
+    end
+end
+
+-- Dungeon: Spec/talent reminder
+local function HandleZoneChanged()
+    C_Timer.After(1, function()
+        if not C_ChallengeMode.IsChallengeModeActive() then return end
+
+        -- Spec reminder
+        if WafflemationsDB.dungeonSpecReminder then
+            local specIndex = GetSpecialization()
+            if specIndex then
+                local _, specName = GetSpecializationInfo(specIndex)
+                if specName then
+                    SendToChannel(WafflemationsDB.dungeonSpecReminderChannel,
+                        "|cff88cc88[Wafflemations]|r Current spec: |cffffffff" .. specName .. "|r")
+                end
+            end
+        end
+
+        -- Unspent talent warning (separate feature)
+        if WafflemationsDB.dungeonUnspentWarning then
+            local configID = C_ClassTalents.GetActiveConfigID()
+            if configID then
+                local configInfo = C_Traits.GetConfigInfo(configID)
+                if configInfo then
+                    for _, treeID in ipairs(configInfo.treeIDs) do
+                        local treeCurrencyInfo = C_Traits.GetTreeCurrencyInfo(configID, treeID, false)
+                        if treeCurrencyInfo then
+                            for _, currency in ipairs(treeCurrencyInfo) do
+                                if currency.quantity and currency.quantity > 0 then
+                                    SendToChannel(WafflemationsDB.dungeonUnspentChannel,
+                                        "|cffff4444[Wafflemations] WARNING:|r You have " .. currency.quantity .. " unspent talent point(s)!")
+                                    if WafflemationsDB.dungeonUnspentSound then
+                                        PlaySound(WafflemationsDB.dungeonUnspentSoundID or 8959, "Master")
+                                    end
+                                    return
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Dungeon: Ready check buff announcements
+local CLASS_BUFFS = {
+    MAGE    = { spell = 1459,   name = "Arcane Intellect" },
+    PRIEST  = { spell = 21562,  name = "Power Word: Fortitude" },
+    WARRIOR = { spell = 6673,   name = "Battle Shout" },
+    DRUID   = { spell = 1126,   name = "Mark of the Wild" },
+    EVOKER  = { spell = 381748, name = "Blessing of the Bronze" },
+}
+
+local function PlayerHasBuff(spellID)
+    for i = 1, 40 do
+        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        if not aura then break end
+        if aura.spellId == spellID then return true end
+    end
+    return false
+end
+
+local function PlayerHasAnyFoodBuff()
+    for i = 1, 40 do
+        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        if not aura then break end
+        -- "Well Fed" and food buffs are generally in the "Food & Drink" category
+        if aura.spellId then
+            local name = aura.name or ""
+            if name == "Well Fed" or name == "Feeling Well Fed" then return true end
+        end
+    end
+    return false
+end
+
+local function PlayerHasFlaskBuff()
+    for i = 1, 40 do
+        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        if not aura then break end
+        if aura.spellId then
+            local name = aura.name or ""
+            -- Phials and flasks typically contain these words
+            if name:find("Phial") or name:find("Flask") then return true end
+        end
+    end
+    return false
+end
+
+local function GetPartyClasses()
+    local classes = {}
+    local prefix = IsInRaid() and "raid" or "party"
+    local count = IsInRaid() and GetNumGroupMembers() or GetNumGroupMembers() - 1
+    for i = 1, count do
+        local unit = prefix .. i
+        if UnitExists(unit) then
+            local _, classToken = UnitClass(unit)
+            if classToken then
+                classes[classToken] = true
+            end
+        end
+    end
+    -- Include player
+    local _, playerClass = UnitClass("player")
+    if playerClass then classes[playerClass] = true end
+    return classes
+end
+
+local function HandleReadyCheck()
+    if not WafflemationsDB.dungeonReadyCheckBuffs then return end
+
+    local missing = {}
+    local partyClasses = GetPartyClasses()
+
+    -- Check class buffs
+    if WafflemationsDB.dungeonBuffCheckClassBuffs then
+        for classToken, buffInfo in pairs(CLASS_BUFFS) do
+            if partyClasses[classToken] and not PlayerHasBuff(buffInfo.spell) then
+                tinsert(missing, buffInfo.name)
+            end
+        end
+    end
+
+    -- Check food
+    if WafflemationsDB.dungeonBuffCheckFood and not PlayerHasAnyFoodBuff() then
+        tinsert(missing, "Food (Well Fed)")
+    end
+
+    -- Check flask
+    if WafflemationsDB.dungeonBuffCheckFlask and not PlayerHasFlaskBuff() then
+        tinsert(missing, "Flask/Phial")
+    end
+
+    if #missing == 0 then return end
+
+    local msg = "Missing buffs: " .. table.concat(missing, ", ")
+
+    if WafflemationsDB.dungeonBuffCheckMode == "party" then
+        local channel = GetGroupChatChannel()
+        if channel then
+            SendChatMessage("[Wafflemations] " .. msg, channel)
+        end
+    else
+        print("|cffff8800[Wafflemations]|r " .. msg)
+    end
+end
+
 -- Event handling
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
@@ -335,11 +590,20 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("CINEMATIC_START")
 frame:RegisterEvent("PLAY_MOVIE")
 frame:RegisterEvent("TALKINGHEAD_REQUESTED")
+frame:RegisterEvent("GROUP_JOINED")
+frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+frame:RegisterEvent("LFG_COMPLETION_REWARD")
+frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+frame:RegisterEvent("READY_CHECK")
 frame:SetScript("OnEvent", function(self, event, arg1)
-    if event == "ADDON_LOADED" and arg1 == addonName then
-        InitDB()
-        print("|cff88cc88[Wafflemations]|r Loaded. Type /waffle for options.")
-        self:UnregisterEvent("ADDON_LOADED")
+    if event == "ADDON_LOADED" then
+        if arg1 == addonName then
+            InitDB()
+            SetupKeystoneAutoInsert()
+            print("|cff88cc88[Wafflemations]|r Loaded. Type /waffle for options.")
+        end
+        -- Try hooking keystone frame whenever any addon loads (it's load-on-demand)
+        SetupKeystoneAutoInsert()
     elseif event == "MERCHANT_SHOW" then
         AutoSellGrayItems()
         AutoRepair()
@@ -359,6 +623,16 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         HandleMovie(arg1)
     elseif event == "TALKINGHEAD_REQUESTED" then
         HandleTalkingHead()
+    elseif event == "GROUP_JOINED" then
+        HandleGroupJoined()
+    elseif event == "CHALLENGE_MODE_COMPLETED" then
+        HandleMythicPlusComplete()
+    elseif event == "LFG_COMPLETION_REWARD" then
+        HandleDungeonComplete()
+    elseif event == "ZONE_CHANGED_NEW_AREA" then
+        HandleZoneChanged()
+    elseif event == "READY_CHECK" then
+        HandleReadyCheck()
     end
 end)
 

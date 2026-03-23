@@ -97,6 +97,28 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `combatHideMap` (bool, default: true) — Auto-hide World Map when entering combat
   - `combatHideBags` (bool, default: true) — Auto-close bags when entering combat
 
+### Dungeon
+- **M+ Key Reminder:** Listens for `GROUP_JOINED`, uses `C_LFGList.GetActiveEntryInfo()` / `C_LFGList.GetSearchResultInfo()` + `C_LFGList.GetActivityInfoTable()` to get group's listed key. Delayed 1s for API data availability.
+- **Auto-Insert Keystone:** Listens for `CHALLENGE_MODE_KEYSTONE_RECEPTACLE_OPEN`, calls `C_ChallengeMode.SlotKeystone()` after 0.3s delay.
+- **End of Dungeon Message:** `CHALLENGE_MODE_COMPLETED` (M+) and `LFG_COMPLETION_REWARD` (regular). Sends customizable message to group chat via `GetGroupChatChannel()` with configurable delay via `C_Timer.After`.
+- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `C_ChallengeMode.IsChallengeModeActive()`. Shows current spec via `GetSpecializationInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional `RAID_WARNING` sound.
+- **Ready Check Buffs:** `READY_CHECK` event. Scans party classes via `UnitClass()`. Checks player for class buffs (Intellect 1459, Fortitude 21562, Battle Shout 6673, MotW 1126, Bronze 381748), food (Well Fed aura name match), flask (Phial/Flask aura name match) via `C_UnitAuras.GetBuffDataByIndex()`. Personal or group chat mode.
+- **Options (WafflemationsDB keys):**
+  - `dungeonKeyReminder` (bool, default: true) — Show group key info on join
+  - `dungeonAutoInsertKey` (bool, default: true) — Auto-slot keystone
+  - `dungeonAutoGG` (bool, default: false) — Master toggle for end-of-dungeon message
+  - `dungeonGGMessage` (string, default: "gg") — Customizable message
+  - `dungeonGGDelay` (number, default: 0) — Delay in seconds
+  - `dungeonGGMythicPlus` (bool, default: true) — Trigger on M+ completion
+  - `dungeonGGRegular` (bool, default: true) — Trigger on regular dungeons
+  - `dungeonSpecReminder` (bool, default: true) — Spec/talent reminder in M+
+  - `dungeonSpecReminderSound` (bool, default: true) — Alert sound for unspent talents
+  - `dungeonReadyCheckBuffs` (bool, default: true) — Buff check on ready check
+  - `dungeonBuffCheckMode` (string, default: "personal") — "personal" or "party"
+  - `dungeonBuffCheckClassBuffs` (bool, default: true) — Check class buffs
+  - `dungeonBuffCheckFood` (bool, default: true) — Check food buff
+  - `dungeonBuffCheckFlask` (bool, default: true) — Check flask/phial
+
 ## Conventions
 
 - **All UI must be designed with beauty and excellent user experience in mind.** Prioritize clean, polished, ElvUI-inspired aesthetics: pixel-perfect borders, consistent spacing, thoughtful color use (green accent for interactive elements, warm gold for labels, muted grays for secondary text), hover/disabled states, and smooth visual feedback. The options panel should feel premium and intuitive.
