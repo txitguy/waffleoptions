@@ -30,7 +30,7 @@ local defaults = {
     autoResChatInstance = true,
     combatHideMap = true,
     combatHideBags = true,
-    skipCutscenes = false,
+    skipCutscenes = true,
     skipCutscenesOnlyWatched = true,
     hideTalkingHead = false,
     dungeonKeyReminder = true,
@@ -43,18 +43,21 @@ local defaults = {
     dungeonGGRaidBoss = false,
     dungeonSpecReminder = true,
     dungeonSpecShowLoadout = true,
-    dungeonSpecReminderChannel = "print",
+    dungeonSpecReminderChannel = "group",
     dungeonSpecReminderDungeon = true,
     dungeonSpecReminderRaid = true,
     dungeonUnspentWarning = true,
-    dungeonUnspentChannel = "print",
+    dungeonUnspentChannel = "group",
     dungeonUnspentSound = true,
     dungeonUnspentSoundID = 11466, -- "You are not prepared"
     dungeonReadyCheckBuffs = true,
-    dungeonBuffCheckMode = "personal",
+    dungeonBuffCheckMode = "party",
     dungeonBuffCheckClassBuffs = true,
     dungeonBuffCheckFood = true,
     dungeonBuffCheckFlask = true,
+    dungeonBuffCheckDungeon = true,
+    dungeonBuffCheckRaid = true,
+    dungeonBuffCheckParty = false,
     dungeonAnnounceMageTable = true,
     dungeonAnnounceWarlock = true,
     dungeonAnnounceFeast = true,
@@ -62,23 +65,23 @@ local defaults = {
     -- General
     showLoginMessage = true,
     -- Auto-Accept Party Invites
-    autoPartyEnabled = false,
+    autoPartyEnabled = true,
     autoPartyFriends = true,
     autoPartyGuild = true,
     -- Party Greetings
-    partyGreetOnJoin = false,
+    partyGreetOnJoin = true,
     partyGreetOnJoinMessages = { "Hey everyone!", "Hello!", "Hi all!", "Howdy!" },
-    partyGreetOnMemberJoin = false,
+    partyGreetOnMemberJoin = true,
     partyGreetOnMemberJoinMessages = { "Welcome {player}!", "Hey {player}!", "Hello {player}!" },
     -- Auto-Release Spirit
-    autoReleaseEnabled = false,
+    autoReleaseEnabled = true,
     autoReleaseDelay = 2,
     -- Auto-Quest
-    autoQuestAccept = false,
-    autoQuestComplete = false,
+    autoQuestAccept = true,
+    autoQuestComplete = true,
     autoQuestRepeatables = true,
     -- Gossip Skip
-    autoGossipSkip = false,
+    autoGossipSkip = true,
     -- Auto-Screenshot
     autoScreenshotEnabled = false,
     autoScreenshotAchievement = true,
@@ -87,15 +90,15 @@ local defaults = {
     autoScreenshotDelay = 1,
     autoScreenshotChat = true,
     -- Achievement Congratulations
-    achieveGratsParty = false,
-    achieveGratsGuild = false,
+    achieveGratsParty = true,
+    achieveGratsGuild = true,
     achieveGratsMessages = { "Grats {player}!", "Congrats {player}!", "Nice one {player}!", "Well done {player}!" },
     -- Auto-Confirm Loot
-    autoConfirmLoot = false,
+    autoConfirmLoot = true,
     -- Auto-Fill Delete
-    autoFillDelete = false,
+    autoFillDelete = true,
     -- Auto Role Check
-    autoRoleCheck = false,
+    autoRoleCheck = true,
     -- Auto-Leave Instance
     autoLeaveEnabled = false,
     autoLeaveDelay = 15,
@@ -106,21 +109,21 @@ local defaults = {
     dungeonKeyChangeAlert = true,
     -- Key Result
     dungeonKeyResult = true,
-    dungeonKeyResultChannel = "print",
+    dungeonKeyResultChannel = "group",
     dungeonKeyResultSound = true,
     dungeonKeyResultSoundID = SOUNDKIT.LFG_DENIED or 11466,
     -- Combat Res Tracker
-    dungeonCombatResTracker = false,
-    dungeonCombatResChannel = "print",
+    dungeonCombatResTracker = true,
+    dungeonCombatResChannel = "group",
     -- Interrupt Announcements
-    dungeonInterruptAnnounce = false,
+    dungeonInterruptAnnounce = true,
     dungeonInterruptMsg = "Interrupted with {spell}!",
     dungeonInterruptChannel = "group",
     -- Loot Spec Warning
     dungeonLootSpecWarning = true,
     dungeonLootSpecSound = false,
     dungeonLootSpecSoundID = 15391,
-    dungeonLootSpecChannel = "print",
+    dungeonLootSpecChannel = "group",
 }
 
 WaffleOptions.defaults = defaults
@@ -803,20 +806,19 @@ local CLASS_BUFFS = {
     EVOKER  = { spell = 381748, name = "Blessing of the Bronze" },
 }
 
-local function PlayerHasBuff(spellID)
+local function UnitHasBuff(unit, spellID)
     for i = 1, 40 do
-        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        local aura = C_UnitAuras.GetBuffDataByIndex(unit, i)
         if not aura then break end
         if aura.spellId == spellID then return true end
     end
     return false
 end
 
-local function PlayerHasAnyFoodBuff()
+local function UnitHasAnyFoodBuff(unit)
     for i = 1, 40 do
-        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        local aura = C_UnitAuras.GetBuffDataByIndex(unit, i)
         if not aura then break end
-        -- "Well Fed" and food buffs are generally in the "Food & Drink" category
         if aura.spellId then
             local name = aura.name or ""
             if name == "Well Fed" or name == "Feeling Well Fed" then return true end
@@ -825,74 +827,103 @@ local function PlayerHasAnyFoodBuff()
     return false
 end
 
-local function PlayerHasFlaskBuff()
+local function UnitHasFlaskBuff(unit)
     for i = 1, 40 do
-        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        local aura = C_UnitAuras.GetBuffDataByIndex(unit, i)
         if not aura then break end
         if aura.spellId then
             local name = aura.name or ""
-            -- Phials and flasks typically contain these words
             if name:find("Phial") or name:find("Flask") then return true end
         end
     end
     return false
 end
 
-local function GetPartyClasses()
-    local classes = {}
+local function GetGroupUnits()
+    local units = {}
     local prefix = IsInRaid() and "raid" or "party"
     local count = IsInRaid() and GetNumGroupMembers() or GetNumGroupMembers() - 1
     for i = 1, count do
         local unit = prefix .. i
         if UnitExists(unit) then
-            local _, classToken = UnitClass(unit)
-            if classToken then
-                classes[classToken] = true
-            end
+            tinsert(units, unit)
         end
     end
-    -- Include player
-    local _, playerClass = UnitClass("player")
-    if playerClass then classes[playerClass] = true end
+    -- In party mode, player is not included in "partyN" units
+    if not IsInRaid() then
+        tinsert(units, "player")
+    end
+    return units
+end
+
+local function GetPartyClasses()
+    local classes = {}
+    local units = GetGroupUnits()
+    for _, unit in ipairs(units) do
+        local _, classToken = UnitClass(unit)
+        if classToken then
+            classes[classToken] = true
+        end
+    end
     return classes
 end
 
 local function HandleReadyCheck()
     if not WaffleOptionsDB.dungeonReadyCheckBuffs then return end
 
-    local missing = {}
-    local partyClasses = GetPartyClasses()
+    -- Check context toggles
+    local _, instanceType = GetInstanceInfo()
+    if instanceType == "party" and not WaffleOptionsDB.dungeonBuffCheckDungeon then return end
+    if instanceType == "raid" and not WaffleOptionsDB.dungeonBuffCheckRaid then return end
+    if instanceType == "none" and IsInGroup() and not WaffleOptionsDB.dungeonBuffCheckParty then return end
 
-    -- Check class buffs
-    if WaffleOptionsDB.dungeonBuffCheckClassBuffs then
-        for classToken, buffInfo in pairs(CLASS_BUFFS) do
-            if partyClasses[classToken] and not PlayerHasBuff(buffInfo.spell) then
-                tinsert(missing, buffInfo.name)
+    local units = GetGroupUnits()
+    local partyClasses = GetPartyClasses()
+    local output = {}
+
+    for _, unit in ipairs(units) do
+        local unitName = UnitName(unit) or unit
+        local missing = {}
+
+        -- Check class buffs on this unit
+        if WaffleOptionsDB.dungeonBuffCheckClassBuffs then
+            for classToken, buffInfo in pairs(CLASS_BUFFS) do
+                if partyClasses[classToken] and not UnitHasBuff(unit, buffInfo.spell) then
+                    tinsert(missing, buffInfo.name)
+                end
             end
+        end
+
+        -- Check food
+        if WaffleOptionsDB.dungeonBuffCheckFood and not UnitHasAnyFoodBuff(unit) then
+            tinsert(missing, "Food (Well Fed)")
+        end
+
+        -- Check flask
+        if WaffleOptionsDB.dungeonBuffCheckFlask and not UnitHasFlaskBuff(unit) then
+            tinsert(missing, "Flask/Phial")
+        end
+
+        if #missing > 0 then
+            tinsert(output, unitName .. ": " .. table.concat(missing, ", "))
         end
     end
 
-    -- Check food
-    if WaffleOptionsDB.dungeonBuffCheckFood and not PlayerHasAnyFoodBuff() then
-        tinsert(missing, "Food (Well Fed)")
-    end
-
-    -- Check flask
-    if WaffleOptionsDB.dungeonBuffCheckFlask and not PlayerHasFlaskBuff() then
-        tinsert(missing, "Flask/Phial")
-    end
-
-    if #missing == 0 then return end
-
-    local msg = "Missing buffs: " .. table.concat(missing, ", ")
+    if #output == 0 then return end
 
     if WaffleOptionsDB.dungeonBuffCheckMode == "party" then
         local channel = GetGroupChatChannel()
         if channel then
-            SendChatMessage("[WaffleOptions] " .. msg, channel)
+            SendChatMessage("[WaffleOptions] Missing buffs:", channel)
+            for _, line in ipairs(output) do
+                SendChatMessage("  " .. line, channel)
+            end
         end
     else
-        print("|cffff8800[WaffleOptions]|r " .. msg)
+        print("|cffff8800[WaffleOptions]|r Missing buffs:")
+        for _, line in ipairs(output) do
+            print("  |cffff8800-|r " .. line)
+        end
     end
 end
 
@@ -1415,3 +1446,4 @@ SlashCmdList["WAFFLETEST"] = function()
     print("|cff88cc88[WaffleOptions]|r Running dungeon checks (test mode)...")
     RunSpecAndTalentCheck()
 end
+

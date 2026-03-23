@@ -1001,59 +1001,46 @@ aboutVer:SetPoint("TOP", aboutTitle, "BOTTOM", 0, -6)
 aboutVer:SetText("v1.0.0  |  Interface 12.0.1  |  by Waffle Taco")
 aboutVer:SetTextColor(unpack(C.textDim))
 
+local aboutLogo = aboutContent:CreateTexture(nil, "ARTWORK")
+aboutLogo:SetSize(128, 128)
+aboutLogo:SetPoint("TOP", aboutVer, "BOTTOM", 0, -14)
+aboutLogo:SetTexture("Interface\\AddOns\\WaffleOptions\\WaffleOptions")
+aboutLogo:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+
 local aboutDesc = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-aboutDesc:SetPoint("TOPLEFT", PAD + 10, -90)
+aboutDesc:SetPoint("TOP", aboutLogo, "BOTTOM", 0, -14)
 aboutDesc:SetWidth(PANEL_WIDTH - SIDEBAR_WIDTH - PAD * 2 - 30)
-aboutDesc:SetJustifyH("LEFT")
+aboutDesc:SetJustifyH("CENTER")
 aboutDesc:SetWordWrap(true)
 aboutDesc:SetText("WaffleOptions is a lightweight gameplay automation addon for World of Warcraft. It handles the repetitive tasks you do every session — repairing gear, selling junk, collecting mail, accepting summons and resurrections, turning in quests, and more. It also provides helpful reminders for dungeons and raids like spec checks, buff warnings, key results, and interrupt announcements. Every feature is independently toggleable with customizable messages, sounds, and channels.")
 aboutDesc:SetTextColor(unpack(C.text))
 aboutDesc:SetSpacing(2)
 
-local aboutDiv = aboutContent:CreateTexture(nil, "ARTWORK")
-aboutDiv:SetHeight(1)
-aboutDiv:SetPoint("TOPLEFT", PAD + 20, -168)
-aboutDiv:SetPoint("RIGHT", -(PAD + 20), 0)
-aboutDiv:SetColorTexture(unpack(C.borderLight))
+local discordLabel = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+discordLabel:SetPoint("TOP", aboutDesc, "BOTTOM", 0, -16)
+discordLabel:SetText("Discord: |cff5865F2discord.gg/CHay7xDM6m|r")
+discordLabel:SetTextColor(unpack(C.textDim))
 
-local features = {
-    { "Interface",      "Cutscenes, Talking Head, Combat auto-hide" },
-    { "Repair & Sell",  "Auto-repair, sell grays, loot confirms, delete helper" },
-    { "Mail",           "Auto-collect items and gold from mailbox" },
-    { "Summon",         "Auto-accept summons with chat messages" },
-    { "Resurrect",      "Auto-resurrect, auto-release, combat res tracker" },
-    { "Party",          "Auto-accept invites, greetings on join" },
-    { "Quests",         "Auto-accept/complete quests, gossip skip" },
-    { "Achievements",   "Auto-screenshot, congratulate party/guild" },
-    { "Keystones",      "Key reminder, auto-insert, depletion warning" },
-    { "Completion Msg", "End-of-dungeon/raid messages, auto-leave" },
-    { "Spec & Talents", "Spec reminder, unspent talents, loot spec warning" },
-    { "Ready Check",    "Buff check on ready check, auto role confirm" },
-    { "Announcements",  "Group utility alerts, interrupt announcements" },
-}
-local fy = -180
-for _, feat in ipairs(features) do
-    local bullet = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bullet:SetPoint("TOPLEFT", PAD + 10, fy)
-    bullet:SetText("|cff66cc66" .. feat[1] .. "|r")
-
-    local desc = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    desc:SetPoint("LEFT", bullet, "RIGHT", 6, 0)
-    desc:SetText("- " .. feat[2])
-    desc:SetTextColor(unpack(C.text))
-
-    fy = fy - 18
-end
+local discordURL = "https://discord.gg/CHay7xDM6m"
+local discordBox = CreateFrame("EditBox", nil, aboutContent, "InputBoxTemplate")
+discordBox:SetSize(220, 20)
+discordBox:SetPoint("TOP", discordLabel, "BOTTOM", 0, -6)
+discordBox:SetAutoFocus(false)
+discordBox:SetText(discordURL)
+discordBox:SetCursorPosition(0)
+discordBox:SetScript("OnTextChanged", function(self) self:SetText(discordURL) self:SetCursorPosition(0) end)
+discordBox:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+discordBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
 local aboutHint = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-aboutHint:SetPoint("TOPLEFT", PAD + 10, fy - 10)
+aboutHint:SetPoint("TOP", discordBox, "BOTTOM", 0, -14)
 aboutHint:SetText("Select a category on the left to configure.")
 aboutHint:SetTextColor(unpack(C.textDim))
 
 do
-    local cb = CreateCheckbox(aboutContent, "Show login message", 0, "showLoginMessage")
-    cb:ClearAllPoints()
-    cb:SetPoint("BOTTOMLEFT", PAD, 14)
+    local loginCB = CreateCheckbox(aboutContent, "Show login message", 0, "showLoginMessage")
+    loginCB:ClearAllPoints()
+    loginCB:SetPoint("BOTTOMLEFT", PAD, 14)
 end
 
 -- Reset confirmation overlay
@@ -1448,9 +1435,14 @@ end
 
 do -- Ready Check
     CreateCategoryButton("Ready Check", "Dungeons & Raids")
-    local f = CreateContentFrame("Ready Check", 430)
+    local f = CreateContentFrame("Ready Check", 550)
     local y = CreateSectionHeader(f, "Ready Check Buffs", -PAD)
     local buffCB, y = CreateCheckbox(f, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
+    y = y - SEC_GAP
+    y = CreateSubHeader(f, "Check In", y)
+    local dungeonBuffCB, y = CreateCheckbox(f, "Dungeons", y, "dungeonBuffCheckDungeon", SUB_PAD)
+    local raidBuffCB, y = CreateCheckbox(f, "Raids", y, "dungeonBuffCheckRaid", SUB_PAD)
+    local partyBuffCB, y = CreateCheckbox(f, "Open world parties", y, "dungeonBuffCheckParty", SUB_PAD)
     y = y - SEC_GAP
     local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
         { label = "Personal (local chat only)", value = "personal" },
@@ -1464,6 +1456,7 @@ do -- Ready Check
     local function U()
         local off = not WaffleOptionsDB.dungeonReadyCheckBuffs
         classCB:SetDisabled(off); foodCB:SetDisabled(off); flaskCB:SetDisabled(off)
+        dungeonBuffCB:SetDisabled(off); raidBuffCB:SetDisabled(off); partyBuffCB:SetDisabled(off)
     end
     buffCB.onChanged = U; f:HookScript("OnShow", U)
     y = y - CB_H - SEC_GAP * 2

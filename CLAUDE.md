@@ -159,6 +159,7 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `hideTalkingHead` (bool, default: false) — Hide Talking Head popups
   - `combatHideMap` (bool, default: true) — Auto-hide World Map when entering combat
   - `combatHideBags` (bool, default: true) — Auto-close bags when entering combat
+  - `showLoginMessage` (bool, default: true) — Show login message on addon load
 
 ### Dungeon & Raid (split across 7 sub-pages: Keystones, Completion Msg, Spec & Talents, Ready Check, Announcements, Combat Res, Interrupts)
 - **M+ Key Reminder:** Listens for `GROUP_JOINED`, uses `C_LFGList.GetActiveEntryInfo()` / `C_LFGList.GetSearchResultInfo()` + `C_LFGList.GetActivityInfoTable()` to get group's listed key. Delayed 1s for API data availability.
@@ -168,7 +169,7 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 - **Auto-Leave Instance:** On M+ or regular dungeon completion (reuses existing events), starts a cancellable countdown then calls `LeaveParty()` via pcall. Cancel with `/wafflecancel`.
 - **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `IsInMythicDungeon()` or `IsInRaidInstance()` based on user toggles. Shows current spec via `GetSpecializationInfo()`. Optionally shows active loadout name via `C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional alert sound. Logic extracted into `RunSpecAndTalentCheck()` for reuse by `/waffletest`. Separately toggleable for dungeons and raids.
 - **Loot Spec Warning:** Integrated into `RunSpecAndTalentCheck()`. Uses `GetLootSpecialization()` (returns 0 if matching active spec). Warns if loot spec differs from active spec with optional alert sound.
-- **Ready Check Buffs:** `READY_CHECK` event. Scans party classes via `UnitClass()`. Checks player for class buffs (Intellect 1459, Fortitude 21562, Battle Shout 6673, MotW 1126, Bronze 381748), food (Well Fed aura name match), flask (Phial/Flask aura name match) via `C_UnitAuras.GetBuffDataByIndex()`. Personal or group chat mode.
+- **Ready Check Buffs:** `READY_CHECK` event. Scans all group members' buffs via `C_UnitAuras.GetBuffDataByIndex()`. Checks each member for class buffs (Intellect 1459, Fortitude 21562, Battle Shout 6673, MotW 1126, Bronze 381748), food (Well Fed aura name match), flask (Phial/Flask aura name match). Reports missing buffs per player. Separately toggleable for dungeons, raids, and open world parties. Personal or group chat mode.
 - **Role Check Auto-Accept:** Listens for `LFG_ROLE_CHECK_SHOW`, calls `CompleteLFGRoleCheck(true)` via pcall. Auto-confirms with current role.
 - **Group Announcements:** `UNIT_SPELLCAST_SUCCEEDED` event. Announces when a group member places a Mage Table (spell 190336), Warlock Summoning Stone (spell 698), or a feast/buffet (table of known feast spell IDs). Each type independently toggleable. Uses `SendToChannel()` with configurable channel (print/emote/group).
 - **Combat Res Tracker:** Integrated into `UNIT_SPELLCAST_SUCCEEDED` handler. Detects combat res spells (Rebirth 20484, Soulstone 20707, Raise Ally 61999, Intercession 391054) from group members.
@@ -206,6 +207,9 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `dungeonBuffCheckClassBuffs` (bool, default: true) — Check class buffs
   - `dungeonBuffCheckFood` (bool, default: true) — Check food buff
   - `dungeonBuffCheckFlask` (bool, default: true) — Check flask/phial
+  - `dungeonBuffCheckDungeon` (bool, default: true) — Check buffs in dungeons
+  - `dungeonBuffCheckRaid` (bool, default: true) — Check buffs in raids
+  - `dungeonBuffCheckParty` (bool, default: false) — Check buffs in open world parties
   - `autoRoleCheck` (bool, default: false) — Auto-confirm role check in LFG
   - `dungeonAnnounceMageTable` (bool, default: true) — Announce Mage Table placement
   - `dungeonAnnounceWarlock` (bool, default: true) — Announce Warlock Summoning Stone placement
