@@ -1317,7 +1317,7 @@ do -- Achievements
     enableCB.onChanged = U; f:HookScript("OnShow", U)
 
     y = y - SEC_GAP * 2
-    y = CreateSectionHeader(f, "Congratulate Achievements", y)
+    y = CreateSectionHeader(f, "Congratulate Player Achievements", y)
     local _, y = CreateCheckbox(f, "Congratulate party members", y, "achieveGratsParty")
     local _, y = CreateCheckbox(f, "Congratulate guild members", y, "achieveGratsGuild")
     CreateDescription(f, "If a player is in both your party and guild, the message is sent to guild only to reduce spam. Uses a 10-second cooldown per player.", y - 4)
@@ -1428,11 +1428,11 @@ do -- Ready Check
     local y = CreateSectionHeader(f, "Ready Check Buffs", -PAD)
     local buffCB, y = CreateCheckbox(f, "Check buffs on ready check", y, "dungeonReadyCheckBuffs")
     y = y - SEC_GAP
-    local _, y = CreateRadioGroup(f, y, "Announcement Mode", {
+    local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
         { label = "Personal (local chat only)", value = "personal" },
-        { label = "Announce to group chat", value = "party" },
+        { label = "Party / Raid / Instance", value = "party" },
     }, "dungeonBuffCheckMode")
-    y = y - SEC_GAP
+    y = y - SEC_GAP * 2
     y = CreateSubHeader(f, "Buffs to Check", y)
     local classCB, y = CreateCheckbox(f, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
     local foodCB, y = CreateCheckbox(f, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)

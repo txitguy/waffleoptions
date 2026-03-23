@@ -103,7 +103,7 @@ local defaults = {
     dungeonKeyResult = true,
     dungeonKeyResultChannel = "print",
     dungeonKeyResultSound = true,
-    dungeonKeyResultSoundID = 11466,
+    dungeonKeyResultSoundID = SOUNDKIT.LFG_DENIED or 11466,
     -- Combat Res Tracker
     dungeonCombatResTracker = false,
     dungeonCombatResChannel = "print",
@@ -114,7 +114,7 @@ local defaults = {
     -- Loot Spec Warning
     dungeonLootSpecWarning = true,
     dungeonLootSpecSound = false,
-    dungeonLootSpecSoundID = 11466,
+    dungeonLootSpecSoundID = 15391,
     dungeonLootSpecChannel = "print",
 }
 
@@ -525,7 +525,7 @@ local function HandleMythicPlusComplete()
                     SendToChannel(WaffleOptionsDB.dungeonKeyResultChannel,
                         "|cffff4444[WaffleOptions]|r Key depleted. New key: " .. (mapName or "?") .. " +" .. keyLevel)
                     if WaffleOptionsDB.dungeonKeyResultSound then
-                        PlaySound(WaffleOptionsDB.dungeonKeyResultSoundID or 11466, "Master")
+                        PlaySound(WaffleOptionsDB.dungeonKeyResultSoundID or SOUNDKIT.LFG_DENIED or 11466, "Master")
                     end
                 end
             end
@@ -721,7 +721,7 @@ local function RunSpecAndTalentCheck()
                             "|cffff8800[WaffleOptions]|r Loot spec is set to |cffffffff" ..
                             (lootSpecName or "Unknown") .. "|r (differs from active spec!)")
                         if WaffleOptionsDB.dungeonLootSpecSound then
-                            PlaySound(WaffleOptionsDB.dungeonLootSpecSoundID or 11466, "Master")
+                            PlaySound(WaffleOptionsDB.dungeonLootSpecSoundID or 15391, "Master")
                         end
                     end
                 end
