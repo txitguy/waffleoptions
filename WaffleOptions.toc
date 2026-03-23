@@ -2,7 +2,7 @@
 ## Title: WaffleOptions
 ## Notes: Various gameplay automations for World of Warcraft.
 ## Author: Waffle Taco
-## Version: 1.0.0
+## Version: @project-version@
 ## SavedVariables: WaffleOptionsDB
 
 WaffleOptions.lua

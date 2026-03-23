@@ -1,0 +1,10 @@
+package-as: WaffleOptions
+
+ignore:
+  - .github
+  - .claude
+  - .gitignore
+  - .pkgmeta
+  - CLAUDE.md
+  - "*.png"
+  - README.md
