@@ -989,7 +989,7 @@ end
 -------------------------------------------------
 CreateCategoryButton("About", nil)
 CreateSidebarDivider()
-local aboutContent = CreateContentFrame("About", 320)
+local aboutContent = CreateContentFrame("About", 610)
 
 local aboutTitle = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
 aboutTitle:SetPoint("TOP", 0, -24)
@@ -998,26 +998,40 @@ aboutTitle:SetTextColor(unpack(C.accent))
 
 local aboutVer = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 aboutVer:SetPoint("TOP", aboutTitle, "BOTTOM", 0, -6)
-aboutVer:SetText("v1.0.0  |  Interface 12.0.1")
+aboutVer:SetText("v1.0.0  |  Interface 12.0.1  |  by Waffle Taco")
 aboutVer:SetTextColor(unpack(C.textDim))
+
+local aboutDesc = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+aboutDesc:SetPoint("TOPLEFT", PAD + 10, -90)
+aboutDesc:SetWidth(PANEL_WIDTH - SIDEBAR_WIDTH - PAD * 2 - 30)
+aboutDesc:SetJustifyH("LEFT")
+aboutDesc:SetWordWrap(true)
+aboutDesc:SetText("WaffleOptions is a lightweight gameplay automation addon for World of Warcraft. It handles the repetitive tasks you do every session — repairing gear, selling junk, collecting mail, accepting summons and resurrections, turning in quests, and more. It also provides helpful reminders for dungeons and raids like spec checks, buff warnings, key results, and interrupt announcements. Every feature is independently toggleable with customizable messages, sounds, and channels.")
+aboutDesc:SetTextColor(unpack(C.text))
+aboutDesc:SetSpacing(2)
 
 local aboutDiv = aboutContent:CreateTexture(nil, "ARTWORK")
 aboutDiv:SetHeight(1)
-aboutDiv:SetPoint("TOPLEFT", PAD + 20, -72)
+aboutDiv:SetPoint("TOPLEFT", PAD + 20, -168)
 aboutDiv:SetPoint("RIGHT", -(PAD + 20), 0)
 aboutDiv:SetColorTexture(unpack(C.borderLight))
 
 local features = {
-    { "Interface",      "Cutscenes, Talking Head, Combat" },
-    { "Repair & Sell",  "Auto-repair gear and sell gray items" },
-    { "Mail",           "Collects mail from your mailbox" },
-    { "Summon",         "Accepts summons automatically" },
-    { "Resurrect",      "Accepts resurrections automatically" },
-    { "Dungeons",       "Keystones, spec reminders, buff checks" },
-    { "Completion",     "End-of-dungeon and raid boss messages" },
-    { "Announcements",  "Group utility alerts" },
+    { "Interface",      "Cutscenes, Talking Head, Combat auto-hide" },
+    { "Repair & Sell",  "Auto-repair, sell grays, loot confirms, delete helper" },
+    { "Mail",           "Auto-collect items and gold from mailbox" },
+    { "Summon",         "Auto-accept summons with chat messages" },
+    { "Resurrect",      "Auto-resurrect, auto-release, combat res tracker" },
+    { "Party",          "Auto-accept invites, greetings on join" },
+    { "Quests",         "Auto-accept/complete quests, gossip skip" },
+    { "Achievements",   "Auto-screenshot, congratulate party/guild" },
+    { "Keystones",      "Key reminder, auto-insert, depletion warning" },
+    { "Completion Msg", "End-of-dungeon/raid messages, auto-leave" },
+    { "Spec & Talents", "Spec reminder, unspent talents, loot spec warning" },
+    { "Ready Check",    "Buff check on ready check, auto role confirm" },
+    { "Announcements",  "Group utility alerts, interrupt announcements" },
 }
-local fy = -90
+local fy = -180
 for _, feat in ipairs(features) do
     local bullet = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     bullet:SetPoint("TOPLEFT", PAD + 10, fy)
@@ -1035,6 +1049,12 @@ local aboutHint = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalS
 aboutHint:SetPoint("TOPLEFT", PAD + 10, fy - 10)
 aboutHint:SetText("Select a category on the left to configure.")
 aboutHint:SetTextColor(unpack(C.textDim))
+
+do
+    local cb = CreateCheckbox(aboutContent, "Show login message", 0, "showLoginMessage")
+    cb:ClearAllPoints()
+    cb:SetPoint("BOTTOMLEFT", PAD, 14)
+end
 
 -- Reset confirmation overlay
 local confirmOverlay = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
@@ -1332,10 +1352,14 @@ CreateSidebarSection("Dungeons & Raids")
 
 do -- Keystones
     CreateCategoryButton("Keystones", "Dungeons & Raids")
-    local f = CreateContentFrame("Keystones", 440)
+    local f = CreateContentFrame("Keystones", 530)
     local y = CreateSectionHeader(f, "Keystone", -PAD)
     local _, y = CreateCheckbox(f, "Show key reminder when joining M+ group", y, "dungeonKeyReminder")
     local _, y = CreateCheckbox(f, "Auto-insert keystone at font of power", y, "dungeonAutoInsertKey")
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Key Swap", y)
+    local _, y = CreateCheckbox(f, "Remind to trade keys after M+ completion", y, "dungeonKeySwapReminder")
+    local _, y = CreateCheckbox(f, "Alert when your keystone changes", y, "dungeonKeyChangeAlert")
     y = y - SEC_GAP * 2
     y = CreateSectionHeader(f, "Key Result", y)
     local resultCB, y = CreateCheckbox(f, "Show key upgrade/depletion result", y, "dungeonKeyResult")
@@ -1450,27 +1474,24 @@ end
 
 do -- Announcements
     CreateCategoryButton("Announcements", "Dungeons & Raids")
-    local f = CreateContentFrame("Announcements", 300)
+    local f = CreateContentFrame("Announcements", 610)
     local y = CreateSectionHeader(f, "Group Announcements", -PAD)
     local _, y = CreateCheckbox(f, "Announce Mage Table", y, "dungeonAnnounceMageTable")
     local _, y = CreateCheckbox(f, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
     local _, y = CreateCheckbox(f, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
     y = y - SEC_GAP
-    CreateRadioGroup(f, y, "Announcement Channel", {
+    local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
         { label = "Print (local chat only)", value = "print" },
         { label = "Emote", value = "emote" },
         { label = "Party / Raid / Instance", value = "group" },
     }, "dungeonAnnounceChannel")
-end
 
-do -- Interrupts
-    CreateCategoryButton("Interrupts", "Dungeons & Raids")
-    local f = CreateContentFrame("Interrupts", 360)
-    local y = CreateSectionHeader(f, "Interrupt Announcements", -PAD)
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Interrupt Announcements", y)
     local _, y = CreateCheckbox(f, "Announce your successful interrupts", y, "dungeonInterruptAnnounce")
     local _, y = CreateTextInput(f, "Message  ({spell} is replaced with interrupt name)", y - 4, 390, "dungeonInterruptMsg")
     y = y - SEC_GAP
-    local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
+    local _, y = CreateRadioGroup(f, y, "Interrupt Channel", {
         { label = "Print (local chat only)", value = "print" },
         { label = "Emote", value = "emote" },
         { label = "Party / Raid / Instance", value = "group" },

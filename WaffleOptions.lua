@@ -59,6 +59,8 @@ local defaults = {
     dungeonAnnounceWarlock = true,
     dungeonAnnounceFeast = true,
     dungeonAnnounceChannel = "group",
+    -- General
+    showLoginMessage = true,
     -- Auto-Accept Party Invites
     autoPartyEnabled = false,
     autoPartyFriends = true,
@@ -99,6 +101,9 @@ local defaults = {
     autoLeaveDelay = 15,
     autoLeaveMythicPlus = false,
     autoLeaveRegular = true,
+    -- Key Swap Reminder
+    dungeonKeySwapReminder = true,
+    dungeonKeyChangeAlert = true,
     -- Key Result
     dungeonKeyResult = true,
     dungeonKeyResultChannel = "print",
@@ -483,6 +488,40 @@ local function SendDungeonGG()
     end)
 end
 
+-- Keystone change tracking
+local trackedKeyLevel = nil
+local trackedKeyMapID = nil
+local keystoneWatchActive = false
+
+local function GetKeystoneInfo()
+    local level = C_MythicPlus.GetOwnedKeystoneLevel()
+    local mapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
+    return level, mapID
+end
+
+local function StartKeystoneWatch()
+    if keystoneWatchActive then return end
+    keystoneWatchActive = true
+    trackedKeyLevel, trackedKeyMapID = GetKeystoneInfo()
+end
+
+local function StopKeystoneWatch()
+    keystoneWatchActive = false
+end
+
+local function CheckKeystoneChanged()
+    if not keystoneWatchActive then return end
+    if not WaffleOptionsDB.dungeonKeyChangeAlert then return end
+    local newLevel, newMapID = GetKeystoneInfo()
+    if not newLevel or not newMapID then return end
+    if (newLevel ~= trackedKeyLevel) or (newMapID ~= trackedKeyMapID) then
+        local mapName = C_ChallengeMode.GetMapUIInfo(newMapID)
+        print("|cff88cc88[WaffleOptions]|r Keystone changed: " .. (mapName or "?") .. " +" .. newLevel)
+        trackedKeyLevel = newLevel
+        trackedKeyMapID = newMapID
+    end
+end
+
 -- Auto-leave instance timer
 local leaveTimer = nil
 
@@ -509,6 +548,20 @@ end
 local function HandleMythicPlusComplete()
     if WaffleOptionsDB.dungeonGGMythicPlus then
         SendDungeonGG()
+    end
+    -- Key swap reminder
+    if WaffleOptionsDB.dungeonKeySwapReminder then
+        C_Timer.After(3, function()
+            if IsInGroup() then
+                print("|cff88cc88[WaffleOptions]|r Don't forget to trade keys with your group before leaving!")
+            end
+        end)
+    end
+    -- Start watching for keystone changes (key trades)
+    if WaffleOptionsDB.dungeonKeyChangeAlert then
+        C_Timer.After(2.5, function()
+            StartKeystoneWatch()
+        end)
     end
     -- Key result
     if WaffleOptionsDB.dungeonKeyResult then
@@ -1240,6 +1293,7 @@ frame:RegisterEvent("PLAY_MOVIE")
 frame:RegisterEvent("TALKINGHEAD_REQUESTED")
 frame:RegisterEvent("GROUP_JOINED")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+frame:RegisterEvent("BAG_UPDATE")
 frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
 frame:RegisterEvent("LFG_COMPLETION_REWARD")
 frame:RegisterEvent("ENCOUNTER_END")
@@ -1266,7 +1320,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
             InitDB()
             SetupKeystoneAutoInsert()
             SetupAutoFillDelete()
-            print("|cff88cc88[WaffleOptions]|r Loaded. Type /waffle for options.")
+            if WaffleOptionsDB.showLoginMessage then
+                print("|cff88cc88[WaffleOptions]|r Loaded. Type /waffle for options.")
+            end
         end
         -- Try hooking keystone frame whenever any addon loads (it's load-on-demand)
         SetupKeystoneAutoInsert()
@@ -1297,6 +1353,9 @@ frame:SetScript("OnEvent", function(self, event, ...)
         HandleGroupJoinGreeting()
     elseif event == "GROUP_ROSTER_UPDATE" then
         HandleGroupRosterUpdate()
+        if not IsInGroup() then StopKeystoneWatch() end
+    elseif event == "BAG_UPDATE" then
+        CheckKeystoneChanged()
     elseif event == "CHALLENGE_MODE_COMPLETED" then
         HandleMythicPlusComplete()
     elseif event == "LFG_COMPLETION_REWARD" then
