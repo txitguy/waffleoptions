@@ -1,4 +1,4 @@
--- Wafflemations Options Panel (ElvUI-inspired, polished)
+-- WaffleOptions Options Panel (ElvUI-inspired, polished)
 
 -------------------------------------------------
 -- Layout Constants
@@ -65,7 +65,7 @@ end
 -------------------------------------------------
 -- Main Frame
 -------------------------------------------------
-local optionsFrame = CreateFrame("Frame", "WafflemationsOptionsFrame", UIParent, "BackdropTemplate")
+local optionsFrame = CreateFrame("Frame", "WaffleOptionsFrame", UIParent, "BackdropTemplate")
 optionsFrame:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
 optionsFrame:SetPoint("CENTER")
 optionsFrame:SetFrameStrata("DIALOG")
@@ -78,7 +78,7 @@ optionsFrame:SetBackdrop(BACKDROP)
 optionsFrame:SetBackdropColor(unpack(C.bg))
 optionsFrame:SetBackdropBorderColor(0, 0, 0, 1)
 optionsFrame:Hide()
-tinsert(UISpecialFrames, "WafflemationsOptionsFrame")
+tinsert(UISpecialFrames, "WaffleOptionsFrame")
 
 CreatePixelBorder(optionsFrame, unpack(C.border))
 
@@ -95,7 +95,7 @@ titleBar:SetBackdropBorderColor(unpack(C.border))
 
 local titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 titleText:SetPoint("LEFT", 12, 0)
-titleText:SetText("WAFFLEMATIONS")
+titleText:SetText("WAFFLEOPTIONS")
 titleText:SetTextColor(unpack(C.accent))
 
 local closeBtn = CreateFrame("Button", nil, titleBar, "BackdropTemplate")
@@ -373,7 +373,7 @@ local function CreateCheckbox(parent, label, y, dbKey, indent)
             return
         end
         btn:SetBackdropColor(0.1, 0.1, 0.1, 1)
-        if WafflemationsDB[dbKey] then
+        if WaffleOptionsDB[dbKey] then
             check:Show()
             btn:SetBackdropBorderColor(unpack(C.accentDim))
         else
@@ -391,7 +391,7 @@ local function CreateCheckbox(parent, label, y, dbKey, indent)
 
     btn:SetScript("OnClick", function()
         if btn.disabled then return end
-        WafflemationsDB[dbKey] = not WafflemationsDB[dbKey]
+        WaffleOptionsDB[dbKey] = not WaffleOptionsDB[dbKey]
         UpdateVisual()
         if btn.onChanged then btn.onChanged() end
     end)
@@ -422,7 +422,7 @@ local function CreateRadioGroup(parent, y, label, options, dbKey)
     local buttons = {}
     local function UpdateAll()
         for _, b in ipairs(buttons) do
-            local sel = (WafflemationsDB[dbKey] == b.optValue)
+            local sel = (WaffleOptionsDB[dbKey] == b.optValue)
             b.dot:SetShown(sel)
             b.ring:SetBackdropBorderColor(sel and C.accentDim[1] or C.border[1], sel and C.accentDim[2] or C.border[2], sel and C.accentDim[3] or C.border[3], 1)
         end
@@ -452,10 +452,10 @@ local function CreateRadioGroup(parent, y, label, options, dbKey)
         t:SetText(opt.label)
         t:SetTextColor(unpack(C.text))
 
-        btn:SetScript("OnClick", function() WafflemationsDB[dbKey] = opt.value; UpdateAll() end)
+        btn:SetScript("OnClick", function() WaffleOptionsDB[dbKey] = opt.value; UpdateAll() end)
         btn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)); t:SetTextColor(unpack(C.textBright)) end)
         btn:SetScript("OnLeave", function(self)
-            local sel = (WafflemationsDB[dbKey] == opt.value)
+            local sel = (WaffleOptionsDB[dbKey] == opt.value)
             self:SetBackdropBorderColor(sel and C.accentDim[1] or C.border[1], sel and C.accentDim[2] or C.border[2], sel and C.accentDim[3] or C.border[3], 1)
             t:SetTextColor(unpack(C.text))
         end)
@@ -504,10 +504,10 @@ local function CreateTextInput(parent, label, y, width, dbKey)
     box:SetAutoFocus(false)
     box:SetMaxLetters(200)
 
-    box:SetText(WafflemationsDB[dbKey] or "")
-    box:SetScript("OnEnterPressed", function(self) WafflemationsDB[dbKey] = self:GetText(); self:ClearFocus() end)
-    box:SetScript("OnEscapePressed", function(self) self:SetText(WafflemationsDB[dbKey] or ""); self:ClearFocus() end)
-    box:SetScript("OnEditFocusLost", function(self) WafflemationsDB[dbKey] = self:GetText(); self:SetBackdropBorderColor(unpack(C.border)) end)
+    box:SetText(WaffleOptionsDB[dbKey] or "")
+    box:SetScript("OnEnterPressed", function(self) WaffleOptionsDB[dbKey] = self:GetText(); self:ClearFocus() end)
+    box:SetScript("OnEscapePressed", function(self) self:SetText(WaffleOptionsDB[dbKey] or ""); self:ClearFocus() end)
+    box:SetScript("OnEditFocusLost", function(self) WaffleOptionsDB[dbKey] = self:GetText(); self:SetBackdropBorderColor(unpack(C.border)) end)
     box:SetScript("OnEditFocusGained", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
 
     return box, y - 46
@@ -576,7 +576,7 @@ local function CreateSoundPicker(parent, y, dbKey)
     playBtn:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(unpack(C.accent)) end)
     playBtn:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(unpack(C.border)) end)
     playBtn:SetScript("OnClick", function()
-        PlaySound(WafflemationsDB[dbKey] or 11466, "Master")
+        PlaySound(WaffleOptionsDB[dbKey] or 11466, "Master")
     end)
 
     -- Simple dropdown list (no scroll needed for small lists)
@@ -592,7 +592,7 @@ local function CreateSoundPicker(parent, y, dbKey)
     listFrame:Hide()
 
     local function UpdateDisplay()
-        local currentID = WafflemationsDB[dbKey] or 11466
+        local currentID = WaffleOptionsDB[dbKey] or 11466
         for _, s in ipairs(ALERT_SOUNDS) do
             if s.id == currentID then
                 dropText:SetText(s.name)
@@ -654,7 +654,7 @@ local function CreateSoundPicker(parent, y, dbKey)
             itemText:SetTextColor(unpack(C.text))
         end)
         item:SetScript("OnClick", function()
-            WafflemationsDB[dbKey] = sound.id
+            WaffleOptionsDB[dbKey] = sound.id
             UpdateDisplay()
             listFrame:Hide()
         end)
@@ -688,7 +688,7 @@ local aboutContent = CreateContentFrame("About", 320)
 
 local aboutTitle = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
 aboutTitle:SetPoint("TOP", 0, -24)
-aboutTitle:SetText("Wafflemations")
+aboutTitle:SetText("WaffleOptions")
 aboutTitle:SetTextColor(unpack(C.accent))
 
 local aboutVer = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -779,11 +779,11 @@ confirmYes:SetScript("OnLeave", function(self)
     self:SetBackdropBorderColor(unpack(C.border))
 end)
 confirmYes:SetScript("OnClick", function()
-    for k, v in pairs(Wafflemations.defaults) do
-        WafflemationsDB[k] = v
+    for k, v in pairs(WaffleOptions.defaults) do
+        WaffleOptionsDB[k] = v
     end
     confirmOverlay:Hide()
-    print("|cff88cc88[Wafflemations]|r All settings have been reset to defaults.")
+    print("|cff88cc88[WaffleOptions]|r All settings have been reset to defaults.")
     ReloadUI()
 end)
 
@@ -843,7 +843,7 @@ local skipCB, y = CreateCheckbox(generalContent, "Auto-skip cutscenes", y, "skip
 local onlyWatchedCB, y = CreateCheckbox(generalContent, "Only skip already-watched cutscenes", y, "skipCutscenesOnlyWatched", SUB_PAD)
 
 local function UpdateOnlyWatchedState()
-    onlyWatchedCB:SetDisabled(not WafflemationsDB.skipCutscenes)
+    onlyWatchedCB:SetDisabled(not WaffleOptionsDB.skipCutscenes)
 end
 skipCB.onChanged = UpdateOnlyWatchedState
 generalContent:HookScript("OnShow", UpdateOnlyWatchedState)
@@ -874,7 +874,7 @@ local repairEnableCB, y = CreateCheckbox(repairSellContent, "Enable Auto-Repair"
 local repairChatCB, y = CreateCheckbox(repairSellContent, "Show repair cost in chat", y, "autoRepairChat", SUB_PAD)
 
 local function UpdateRepairChatState()
-    repairChatCB:SetDisabled(not WafflemationsDB.autoRepairEnabled)
+    repairChatCB:SetDisabled(not WaffleOptionsDB.autoRepairEnabled)
 end
 repairEnableCB.onChanged = UpdateRepairChatState
 repairSellContent:HookScript("OnShow", UpdateRepairChatState)
@@ -891,7 +891,7 @@ local sellEnableCB, y = CreateCheckbox(repairSellContent, "Enable Auto-Sell gray
 local sellChatCB = CreateCheckbox(repairSellContent, "Show sell total in chat", y, "autoSellChat", SUB_PAD)
 
 local function UpdateSellChatState()
-    sellChatCB:SetDisabled(not WafflemationsDB.autoSellEnabled)
+    sellChatCB:SetDisabled(not WaffleOptionsDB.autoSellEnabled)
 end
 sellEnableCB.onChanged = UpdateSellChatState
 repairSellContent:HookScript("OnShow", UpdateSellChatState)
@@ -931,7 +931,7 @@ local _, y = CreateTextInput(summonContent, "Receive Message  ({summoner} and {l
 
 -- Link: disable receive checkbox when auto-accept is on
 local function UpdateReceiveState()
-    receiveChatCB:SetDisabled(WafflemationsDB.autoSummonEnabled)
+    receiveChatCB:SetDisabled(WaffleOptionsDB.autoSummonEnabled)
 end
 summonEnabledCB.onChanged = UpdateReceiveState
 summonContent:HookScript("OnShow", UpdateReceiveState)
@@ -972,7 +972,7 @@ CreateCheckbox(resContent, "Instance (LFG/LFR)", y, "autoResChatInstance")
 -- Dungeon
 -------------------------------------------------
 CreateCategoryButton("Dungeon", 7)
-local dungeonContent = CreateContentFrame("Dungeon", 900)
+local dungeonContent = CreateContentFrame("Dungeon", 1300)
 
 -- Keystone section
 y = CreateSectionHeader(dungeonContent, "Keystone", -PAD)
@@ -983,13 +983,13 @@ local _, y = CreateCheckbox(dungeonContent, "Auto-insert keystone at font of pow
 y = y - SEC_GAP * 2
 y = CreateSectionHeader(dungeonContent, "End of Dungeon", y)
 local ggEnableCB, y = CreateCheckbox(dungeonContent, "Send message at end of dungeon", y, "dungeonAutoGG")
+local ggMythicCB, y = CreateCheckbox(dungeonContent, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
+local ggRegularCB, y = CreateCheckbox(dungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
 local ggMsgInput, y = CreateTextInput(dungeonContent, "Message", y - 4, 390, "dungeonGGMessage")
 local ggDelayInput, y = CreateTextInput(dungeonContent, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
-local ggMythicCB, y = CreateCheckbox(dungeonContent, "Trigger on M+ completion", y - 4, "dungeonGGMythicPlus", SUB_PAD)
-local ggRegularCB, y = CreateCheckbox(dungeonContent, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
 
 local function UpdateGGState()
-    local off = not WafflemationsDB.dungeonAutoGG
+    local off = not WaffleOptionsDB.dungeonAutoGG
     ggMythicCB:SetDisabled(off)
     ggRegularCB:SetDisabled(off)
 end
@@ -1022,7 +1022,7 @@ local _, y = CreateRadioGroup(dungeonContent, y, "Warning Channel", {
 }, "dungeonUnspentChannel")
 
 local function UpdateUnspentSoundState()
-    unspentSoundCB:SetDisabled(not WafflemationsDB.dungeonUnspentWarning)
+    unspentSoundCB:SetDisabled(not WaffleOptionsDB.dungeonUnspentWarning)
 end
 unspentCB.onChanged = UpdateUnspentSoundState
 dungeonContent:HookScript("OnShow", UpdateUnspentSoundState)
@@ -1042,16 +1042,29 @@ y = y - SEC_GAP
 y = CreateSubHeader(dungeonContent, "Buffs to Check", y)
 local buffClassCB, y = CreateCheckbox(dungeonContent, "Class buffs (based on group composition)", y, "dungeonBuffCheckClassBuffs", SUB_PAD)
 local buffFoodCB, y = CreateCheckbox(dungeonContent, "Food (Well Fed)", y, "dungeonBuffCheckFood", SUB_PAD)
-local buffFlaskCB = CreateCheckbox(dungeonContent, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
+local buffFlaskCB, y = CreateCheckbox(dungeonContent, "Flask / Phial", y, "dungeonBuffCheckFlask", SUB_PAD)
 
 local function UpdateBuffCheckState()
-    local off = not WafflemationsDB.dungeonReadyCheckBuffs
+    local off = not WaffleOptionsDB.dungeonReadyCheckBuffs
     buffClassCB:SetDisabled(off)
     buffFoodCB:SetDisabled(off)
     buffFlaskCB:SetDisabled(off)
 end
 buffCheckCB.onChanged = UpdateBuffCheckState
 dungeonContent:HookScript("OnShow", UpdateBuffCheckState)
+
+-- Group Announcements section
+y = y - SEC_GAP * 2
+y = CreateSectionHeader(dungeonContent, "Group Announcements", y)
+local _, y = CreateCheckbox(dungeonContent, "Announce Mage Table", y, "dungeonAnnounceMageTable")
+local _, y = CreateCheckbox(dungeonContent, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
+local _, y = CreateCheckbox(dungeonContent, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
+y = y - SEC_GAP
+local _, y = CreateRadioGroup(dungeonContent, y, "Announcement Channel", {
+    { label = "Print (local chat only)", value = "print" },
+    { label = "Emote", value = "emote" },
+    { label = "Party / Raid / Instance", value = "group" },
+}, "dungeonAnnounceChannel")
 
 -------------------------------------------------
 -- Default selection
@@ -1061,7 +1074,7 @@ SelectCategory("About")
 -------------------------------------------------
 -- Public toggle
 -------------------------------------------------
-function Wafflemations.ToggleOptions()
+function WaffleOptions.ToggleOptions()
     if optionsFrame:IsShown() then
         optionsFrame:Hide()
     else

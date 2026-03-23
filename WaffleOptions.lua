@@ -1,7 +1,7 @@
 local addonName = ...
 
 -- Global addon table
-Wafflemations = {}
+WaffleOptions = {}
 
 -- Default settings
 local defaults = {
@@ -52,18 +52,22 @@ local defaults = {
     dungeonBuffCheckClassBuffs = true,
     dungeonBuffCheckFood = true,
     dungeonBuffCheckFlask = true,
+    dungeonAnnounceMageTable = true,
+    dungeonAnnounceWarlock = true,
+    dungeonAnnounceFeast = true,
+    dungeonAnnounceChannel = "group",
 }
 
-Wafflemations.defaults = defaults
+WaffleOptions.defaults = defaults
 
 -- Initialize saved variables with defaults (called immediately so Options.lua can read DB)
 local function InitDB()
-    if not WafflemationsDB then
-        WafflemationsDB = {}
+    if not WaffleOptionsDB then
+        WaffleOptionsDB = {}
     end
     for k, v in pairs(defaults) do
-        if WafflemationsDB[k] == nil then
-            WafflemationsDB[k] = v
+        if WaffleOptionsDB[k] == nil then
+            WaffleOptionsDB[k] = v
         end
     end
 end
@@ -71,7 +75,7 @@ InitDB()
 
 -- Auto-sell gray items
 local function AutoSellGrayItems()
-    if not WafflemationsDB.autoSellEnabled then return end
+    if not WaffleOptionsDB.autoSellEnabled then return end
 
     local totalSellPrice = 0
     for bag = 0, 4 do
@@ -84,14 +88,14 @@ local function AutoSellGrayItems()
         end
     end
 
-    if totalSellPrice > 0 and WafflemationsDB.autoSellChat then
-        print("|cff88cc88[Wafflemations]|r Sold all gray items for " .. GetCoinTextureString(totalSellPrice) .. ".")
+    if totalSellPrice > 0 and WaffleOptionsDB.autoSellChat then
+        print("|cff88cc88[WaffleOptions]|r Sold all gray items for " .. GetCoinTextureString(totalSellPrice) .. ".")
     end
 end
 
 -- Auto-repair gear
 local function AutoRepair()
-    if not WafflemationsDB.autoRepairEnabled then return end
+    if not WaffleOptionsDB.autoRepairEnabled then return end
     if not CanMerchantRepair() then return end
 
     local repairCost, canRepair = GetRepairAllCost()
@@ -99,7 +103,7 @@ local function AutoRepair()
 
     local useGuild = false
 
-    if WafflemationsDB.autoRepairMode == "guild_first" then
+    if WaffleOptionsDB.autoRepairMode == "guild_first" then
         if IsInGuild() and CanGuildBankRepair and CanGuildBankRepair() then
             RepairAllItems(true)
             useGuild = true
@@ -112,9 +116,9 @@ local function AutoRepair()
         end
     end
 
-    if WafflemationsDB.autoRepairChat then
+    if WaffleOptionsDB.autoRepairChat then
         local source = useGuild and "Guild" or "Personal"
-        print("|cff88cc88[Wafflemations]|r " .. source .. " repair cost: " .. GetCoinTextureString(repairCost) .. ".")
+        print("|cff88cc88[WaffleOptions]|r " .. source .. " repair cost: " .. GetCoinTextureString(repairCost) .. ".")
     end
 end
 
@@ -130,11 +134,11 @@ local function FinishMailProcessing()
     if not mail.processing then return end
     mail.processing = false
 
-    if WafflemationsDB.autoMailChat and mail.totalMoney > 0 then
-        print("|cff88cc88[Wafflemations]|r Collected " .. GetCoinTextureString(mail.totalMoney) .. " from mail.")
+    if WaffleOptionsDB.autoMailChat and mail.totalMoney > 0 then
+        print("|cff88cc88[WaffleOptions]|r Collected " .. GetCoinTextureString(mail.totalMoney) .. " from mail.")
     end
-    if WafflemationsDB.autoMailChat and mail.itemsCollected > 0 then
-        print("|cff88cc88[Wafflemations]|r Collected items from " .. mail.itemsCollected .. " mail(s).")
+    if WaffleOptionsDB.autoMailChat and mail.itemsCollected > 0 then
+        print("|cff88cc88[WaffleOptions]|r Collected items from " .. mail.itemsCollected .. " mail(s).")
     end
 end
 
@@ -187,7 +191,7 @@ local function CollectNextMail()
     end
 
     -- Collection done, start delete phase if enabled
-    if WafflemationsDB.autoMailDeleteEmpty then
+    if WaffleOptionsDB.autoMailDeleteEmpty then
         mail.index = GetInboxNumItems()
         C_Timer.After(0.5, DeleteNextEmptyMail)
     else
@@ -196,7 +200,7 @@ local function CollectNextMail()
 end
 
 local function StartMailCollection()
-    if not WafflemationsDB.autoMailEnabled then return end
+    if not WaffleOptionsDB.autoMailEnabled then return end
     if mail.processing then return end
 
     local numItems = GetInboxNumItems()
@@ -227,9 +231,9 @@ local function GetGroupChatChannel()
 end
 
 local function IsSummonChatEnabledForGroup(groupType)
-    if groupType == "party" then return WafflemationsDB.autoSummonChatParty end
-    if groupType == "raid" then return WafflemationsDB.autoSummonChatRaid end
-    if groupType == "instance" then return WafflemationsDB.autoSummonChatInstance end
+    if groupType == "party" then return WaffleOptionsDB.autoSummonChatParty end
+    if groupType == "raid" then return WaffleOptionsDB.autoSummonChatRaid end
+    if groupType == "instance" then return WaffleOptionsDB.autoSummonChatInstance end
     return false
 end
 
@@ -248,19 +252,19 @@ local function HandleSummon()
     local chatEnabled = channel and groupType and IsSummonChatEnabledForGroup(groupType)
 
     -- Chat on receive (only if auto-accept is OFF to prevent spam)
-    if not WafflemationsDB.autoSummonEnabled and WafflemationsDB.autoSummonChatOnReceive and chatEnabled then
-        local msg = FormatSummonMsg(WafflemationsDB.autoSummonReceiveMsg, summoner, location)
+    if not WaffleOptionsDB.autoSummonEnabled and WaffleOptionsDB.autoSummonChatOnReceive and chatEnabled then
+        local msg = FormatSummonMsg(WaffleOptionsDB.autoSummonReceiveMsg, summoner, location)
         SendChatMessage(msg, channel)
     end
 
     -- Auto-accept
-    if WafflemationsDB.autoSummonEnabled then
+    if WaffleOptionsDB.autoSummonEnabled then
         C_SummonInfo.ConfirmSummon()
-        print("|cff88cc88[Wafflemations]|r Auto-accepted summon to " .. location .. " from " .. summoner .. ".")
+        print("|cff88cc88[WaffleOptions]|r Auto-accepted summon to " .. location .. " from " .. summoner .. ".")
 
         -- Chat on accept
-        if WafflemationsDB.autoSummonChatOnAccept and chatEnabled then
-            local msg = FormatSummonMsg(WafflemationsDB.autoSummonAcceptMsg, summoner, location)
+        if WaffleOptionsDB.autoSummonChatOnAccept and chatEnabled then
+            local msg = FormatSummonMsg(WaffleOptionsDB.autoSummonAcceptMsg, summoner, location)
             SendChatMessage(msg, channel)
         end
     end
@@ -268,17 +272,17 @@ end
 
 -- Auto-resurrect
 local function IsResChatEnabledForGroup(groupType)
-    if groupType == "party" then return WafflemationsDB.autoResChatParty end
-    if groupType == "raid" then return WafflemationsDB.autoResChatRaid end
-    if groupType == "instance" then return WafflemationsDB.autoResChatInstance end
+    if groupType == "party" then return WaffleOptionsDB.autoResChatParty end
+    if groupType == "raid" then return WaffleOptionsDB.autoResChatRaid end
+    if groupType == "instance" then return WaffleOptionsDB.autoResChatInstance end
     return false
 end
 
 local function HandleResurrect(casterName)
     local inCombat = UnitAffectingCombat("player")
 
-    if inCombat and not WafflemationsDB.autoResCombatEnabled then return end
-    if not inCombat and not WafflemationsDB.autoResOOCEnabled then return end
+    if inCombat and not WaffleOptionsDB.autoResCombatEnabled then return end
+    if not inCombat and not WaffleOptionsDB.autoResOOCEnabled then return end
 
     local caster = casterName or "someone"
 
@@ -287,13 +291,13 @@ local function HandleResurrect(casterName)
     StaticPopup_Hide("RESURRECT_NO_SICKNESS")
     StaticPopup_Hide("RESURRECT")
 
-    print("|cff88cc88[Wafflemations]|r Auto-accepted " .. (inCombat and "combat " or "") .. "resurrection from " .. caster .. ".")
+    print("|cff88cc88[WaffleOptions]|r Auto-accepted " .. (inCombat and "combat " or "") .. "resurrection from " .. caster .. ".")
 
     -- Chat announce
-    if WafflemationsDB.autoResChatOnAccept then
+    if WaffleOptionsDB.autoResChatOnAccept then
         local channel, groupType = GetGroupChatChannel()
         if channel and groupType and IsResChatEnabledForGroup(groupType) then
-            local msg = WafflemationsDB.autoResAcceptMsg:gsub("{caster}", caster)
+            local msg = WaffleOptionsDB.autoResAcceptMsg:gsub("{caster}", caster)
             SendChatMessage(msg, channel)
         end
     end
@@ -301,10 +305,10 @@ end
 
 -- Combat auto-hide
 local function HandleCombatStart()
-    if WafflemationsDB.combatHideMap and WorldMapFrame and WorldMapFrame:IsShown() then
+    if WaffleOptionsDB.combatHideMap and WorldMapFrame and WorldMapFrame:IsShown() then
         WorldMapFrame:Hide()
     end
-    if WafflemationsDB.combatHideBags then
+    if WaffleOptionsDB.combatHideBags then
         CloseAllBags()
     end
 end
@@ -313,8 +317,8 @@ end
 local watchedMovies = {}
 
 local function HandleCinematic()
-    if not WafflemationsDB.skipCutscenes then return end
-    if WafflemationsDB.skipCutscenesOnlyWatched then
+    if not WaffleOptionsDB.skipCutscenes then return end
+    if WaffleOptionsDB.skipCutscenesOnlyWatched then
         -- For in-engine cinematics, no movie ID is available; skip if seen this session
         if not watchedMovies["cinematic"] then
             watchedMovies["cinematic"] = true
@@ -325,8 +329,8 @@ local function HandleCinematic()
 end
 
 local function HandleMovie(movieID)
-    if not WafflemationsDB.skipCutscenes then return end
-    if WafflemationsDB.skipCutscenesOnlyWatched then
+    if not WaffleOptionsDB.skipCutscenes then return end
+    if WaffleOptionsDB.skipCutscenesOnlyWatched then
         if not C_MovieInfo.GetMovieSeen(movieID) then
             return
         end
@@ -336,7 +340,7 @@ end
 
 -- Hide Talking Head
 local function HandleTalkingHead()
-    if not WafflemationsDB.hideTalkingHead then return end
+    if not WaffleOptionsDB.hideTalkingHead then return end
     if TalkingHeadFrame and TalkingHeadFrame:IsShown() then
         TalkingHeadFrame:Hide()
     end
@@ -344,14 +348,14 @@ end
 
 -- Dungeon: M+ key reminder on group join
 local function HandleGroupJoined()
-    if not WafflemationsDB.dungeonKeyReminder then return end
+    if not WaffleOptionsDB.dungeonKeyReminder then return end
     C_Timer.After(1, function()
         local activeEntry = C_LFGList.GetActiveEntryInfo()
         if activeEntry then
             local activityInfo = C_LFGList.GetActivityInfoTable(activeEntry.activityID)
             if activityInfo and activityInfo.isMythicPlusActivity then
                 local mapName = activityInfo.fullName or activityInfo.shortName or "Unknown Dungeon"
-                print("|cff88cc88[Wafflemations]|r Group key: " .. mapName)
+                print("|cff88cc88[WaffleOptions]|r Group key: " .. mapName)
                 return
             end
         end
@@ -364,7 +368,7 @@ local function HandleGroupJoined()
                     local activityInfo = C_LFGList.GetActivityInfoTable(result.activityID)
                     if activityInfo and activityInfo.isMythicPlusActivity then
                         local mapName = activityInfo.fullName or activityInfo.shortName or "Unknown Dungeon"
-                        print("|cff88cc88[Wafflemations]|r Group key: " .. mapName)
+                        print("|cff88cc88[WaffleOptions]|r Group key: " .. mapName)
                         return
                     end
                 end
@@ -380,7 +384,7 @@ local function SetupKeystoneAutoInsert()
     if ChallengeKeystoneFrame then
         keystoneHooked = true
         ChallengeKeystoneFrame:HookScript("OnShow", function()
-            if not WafflemationsDB.dungeonAutoInsertKey then return end
+            if not WaffleOptionsDB.dungeonAutoInsertKey then return end
             C_Timer.After(0.3, function()
                 C_ChallengeMode.SlotKeystone()
             end)
@@ -390,11 +394,11 @@ end
 
 -- Dungeon: End of dungeon message
 local function SendDungeonGG()
-    if not WafflemationsDB.dungeonAutoGG then return end
+    if not WaffleOptionsDB.dungeonAutoGG then return end
     local channel = GetGroupChatChannel()
     if not channel then return end
-    local msg = WafflemationsDB.dungeonGGMessage or "gg"
-    local delay = tonumber(WafflemationsDB.dungeonGGDelay) or 0
+    local msg = WaffleOptionsDB.dungeonGGMessage or "gg"
+    local delay = tonumber(WaffleOptionsDB.dungeonGGDelay) or 0
     C_Timer.After(delay, function()
         if IsInGroup() then
             SendChatMessage(msg, channel)
@@ -403,13 +407,13 @@ local function SendDungeonGG()
 end
 
 local function HandleMythicPlusComplete()
-    if WafflemationsDB.dungeonGGMythicPlus then
+    if WaffleOptionsDB.dungeonGGMythicPlus then
         SendDungeonGG()
     end
 end
 
 local function HandleDungeonComplete()
-    if WafflemationsDB.dungeonGGRegular then
+    if WaffleOptionsDB.dungeonGGRegular then
         SendDungeonGG()
     end
 end
@@ -443,14 +447,14 @@ end
 
 local function RunSpecAndTalentCheck()
         -- Spec reminder
-        if WafflemationsDB.dungeonSpecReminder then
+        if WaffleOptionsDB.dungeonSpecReminder then
             local specIndex = GetSpecialization()
             if specIndex then
                 local _, specName = GetSpecializationInfo(specIndex)
                 if specName then
-                    local msg = "|cff88cc88[Wafflemations]|r Current spec: |cffffffff" .. specName .. "|r"
+                    local msg = "|cff88cc88[WaffleOptions]|r Current spec: |cffffffff" .. specName .. "|r"
                     -- Show active loadout name
-                    if WafflemationsDB.dungeonSpecShowLoadout then
+                    if WaffleOptionsDB.dungeonSpecShowLoadout then
                         local specID = GetSpecializationInfo(specIndex)
                         local loadoutName = nil
                         if specID then
@@ -516,13 +520,13 @@ local function RunSpecAndTalentCheck()
                             msg = msg .. " - Loadout: |cff00ff00" .. loadoutName .. "|r"
                         end
                     end
-                    SendToChannel(WafflemationsDB.dungeonSpecReminderChannel, msg)
+                    SendToChannel(WaffleOptionsDB.dungeonSpecReminderChannel, msg)
                 end
             end
         end
 
         -- Unspent talent warning (separate feature)
-        if WafflemationsDB.dungeonUnspentWarning then
+        if WaffleOptionsDB.dungeonUnspentWarning then
             local configID = C_ClassTalents.GetActiveConfigID()
             if configID then
                 local configInfo = C_Traits.GetConfigInfo(configID)
@@ -541,10 +545,10 @@ local function RunSpecAndTalentCheck()
                         end
                     end
                     if totalUnspent > 0 then
-                        SendToChannel(WafflemationsDB.dungeonUnspentChannel,
-                            "|cffff4444[Wafflemations] WARNING:|r You have " .. totalUnspent .. " unspent talent point(s)!")
-                        if WafflemationsDB.dungeonUnspentSound then
-                            PlaySound(WafflemationsDB.dungeonUnspentSoundID or 11466, "Master")
+                        SendToChannel(WaffleOptionsDB.dungeonUnspentChannel,
+                            "|cffff4444[WaffleOptions] WARNING:|r You have " .. totalUnspent .. " unspent talent point(s)!")
+                        if WaffleOptionsDB.dungeonUnspentSound then
+                            PlaySound(WaffleOptionsDB.dungeonUnspentSoundID or 11466, "Master")
                         end
                     end
                 end
@@ -623,13 +627,13 @@ local function GetPartyClasses()
 end
 
 local function HandleReadyCheck()
-    if not WafflemationsDB.dungeonReadyCheckBuffs then return end
+    if not WaffleOptionsDB.dungeonReadyCheckBuffs then return end
 
     local missing = {}
     local partyClasses = GetPartyClasses()
 
     -- Check class buffs
-    if WafflemationsDB.dungeonBuffCheckClassBuffs then
+    if WaffleOptionsDB.dungeonBuffCheckClassBuffs then
         for classToken, buffInfo in pairs(CLASS_BUFFS) do
             if partyClasses[classToken] and not PlayerHasBuff(buffInfo.spell) then
                 tinsert(missing, buffInfo.name)
@@ -638,12 +642,12 @@ local function HandleReadyCheck()
     end
 
     -- Check food
-    if WafflemationsDB.dungeonBuffCheckFood and not PlayerHasAnyFoodBuff() then
+    if WaffleOptionsDB.dungeonBuffCheckFood and not PlayerHasAnyFoodBuff() then
         tinsert(missing, "Food (Well Fed)")
     end
 
     -- Check flask
-    if WafflemationsDB.dungeonBuffCheckFlask and not PlayerHasFlaskBuff() then
+    if WaffleOptionsDB.dungeonBuffCheckFlask and not PlayerHasFlaskBuff() then
         tinsert(missing, "Flask/Phial")
     end
 
@@ -651,13 +655,60 @@ local function HandleReadyCheck()
 
     local msg = "Missing buffs: " .. table.concat(missing, ", ")
 
-    if WafflemationsDB.dungeonBuffCheckMode == "party" then
+    if WaffleOptionsDB.dungeonBuffCheckMode == "party" then
         local channel = GetGroupChatChannel()
         if channel then
-            SendChatMessage("[Wafflemations] " .. msg, channel)
+            SendChatMessage("[WaffleOptions] " .. msg, channel)
         end
     else
-        print("|cffff8800[Wafflemations]|r " .. msg)
+        print("|cffff8800[WaffleOptions]|r " .. msg)
+    end
+end
+
+-- Group utility announcements (mage table, warlock summon, feasts)
+local MAGE_TABLE_SPELL = 190336   -- Conjure Refreshment Table
+local WARLOCK_SUMMON_SPELL = 698  -- Ritual of Summoning
+
+local FEAST_SPELLS = {
+    -- The War Within
+    [462704] = true, -- Feast of the Midnight Masquerade
+    [462694] = true, -- Feast of the Divine Day
+    [461858] = true, -- Bountiful Delicacy Platter
+    [461874] = true, -- Everything Stew Surprise
+    [461880] = true, -- Outsider's Grand Banquet
+    -- Dragonflight
+    [382423] = true, -- Grand Banquet of the Kaja'mite
+    [383063] = true, -- Yusa's Hearty Stew
+    [382427] = true, -- Hoard of Draconic Delicacies
+    -- Shadowlands
+    [307157] = true, -- Feast of Gluttonous Hedonism
+    [308458] = true, -- Surprisingly Palatable Feast
+    [359336] = true, -- Empty Kettle of Stone Soup
+}
+
+local function HandleCombatLogGroupUtility()
+    local _, subEvent, _, _, sourceName, sourceFlags = CombatLogGetCurrentEventInfo()
+    if subEvent ~= "SPELL_CREATE" then return end
+    if not sourceName then return end
+    if not IsInGroup() then return end
+
+    -- Check source is a group member (friendly + in raid/party)
+    local inGroup = bit.band(sourceFlags, COMBATLOG_OBJECT_AFFILIATION_MINE + COMBATLOG_OBJECT_AFFILIATION_PARTY + COMBATLOG_OBJECT_AFFILIATION_RAID) > 0
+    if not inGroup then return end
+
+    local spellID = select(12, CombatLogGetCurrentEventInfo())
+    local msg
+
+    if spellID == MAGE_TABLE_SPELL and WaffleOptionsDB.dungeonAnnounceMageTable then
+        msg = sourceName .. " placed a Mage Table!"
+    elseif spellID == WARLOCK_SUMMON_SPELL and WaffleOptionsDB.dungeonAnnounceWarlock then
+        msg = sourceName .. " placed a Summoning Stone!"
+    elseif FEAST_SPELLS[spellID] and WaffleOptionsDB.dungeonAnnounceFeast then
+        msg = sourceName .. " placed a feast!"
+    end
+
+    if msg then
+        SendToChannel(WaffleOptionsDB.dungeonAnnounceChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
     end
 end
 
@@ -678,12 +729,13 @@ frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
 frame:RegisterEvent("LFG_COMPLETION_REWARD")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("READY_CHECK")
+frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 frame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == addonName then
             InitDB()
             SetupKeystoneAutoInsert()
-            print("|cff88cc88[Wafflemations]|r Loaded. Type /waffle for options.")
+            print("|cff88cc88[WaffleOptions]|r Loaded. Type /waffle for options.")
         end
         -- Try hooking keystone frame whenever any addon loads (it's load-on-demand)
         SetupKeystoneAutoInsert()
@@ -716,20 +768,22 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         HandleZoneChanged()
     elseif event == "READY_CHECK" then
         HandleReadyCheck()
+    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        HandleCombatLogGroupUtility()
     end
 end)
 
 -- Slash command
 SLASH_WAFFLEMATIONS1 = "/waffle"
 SlashCmdList["WAFFLEMATIONS"] = function()
-    if Wafflemations.ToggleOptions then
-        Wafflemations.ToggleOptions()
+    if WaffleOptions.ToggleOptions then
+        WaffleOptions.ToggleOptions()
     end
 end
 
 -- Test command: triggers dungeon checks regardless of location
 SLASH_WAFFLETEST1 = "/waffletest"
 SlashCmdList["WAFFLETEST"] = function()
-    print("|cff88cc88[Wafflemations]|r Running dungeon checks (test mode)...")
+    print("|cff88cc88[WaffleOptions]|r Running dungeon checks (test mode)...")
     RunSpecAndTalentCheck()
 end
