@@ -1044,12 +1044,6 @@ aboutHint:SetPoint("TOP", discordBox, "BOTTOM", 0, -14)
 aboutHint:SetText("Select a category on the left to configure.")
 aboutHint:SetTextColor(unpack(C.textDim))
 
-do
-    local loginCB = CreateCheckbox(aboutContent, "Show login message", 0, "showLoginMessage")
-    loginCB:ClearAllPoints()
-    loginCB:SetPoint("BOTTOMLEFT", PAD, 14)
-end
-
 -- Reset confirmation overlay
 local confirmOverlay = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
 confirmOverlay:SetAllPoints()
@@ -1428,7 +1422,7 @@ end
 
 do -- Announcements
     CreateCategoryButton("Announcements", "Dungeons & Raids")
-    local f = CreateContentFrame("Announcements", 860)
+    local f = CreateContentFrame("Announcements", 720)
     local y = CreateSectionHeader(f, "Group Announcements", -PAD)
     local _, y = CreateCheckbox(f, "Announce Mage Table", y, "dungeonAnnounceMageTable")
     local _, y = CreateCheckbox(f, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
@@ -1452,7 +1446,7 @@ do -- Announcements
     }, "dungeonInterruptChannel")
     CreateDescription(f, "Announces your own interrupts only. Cannot detect group member interrupts due to WoW API restrictions.", y - 20)
 
-    y = y - SEC_GAP * 2
+    y = y - 30 - SEC_GAP * 2
     y = CreateSectionHeader(f, "Dispel / Purge Announcements", y)
     local _, y = CreateCheckbox(f, "Announce your successful dispels", y, "dungeonDispelAnnounce")
     local _, y = CreateTextInput(f, "Message  ({spell} is replaced with dispel name)", y - 4, 390, "dungeonDispelMsg")
