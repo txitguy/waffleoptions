@@ -1001,24 +1001,21 @@ CreateCategoryButton("About", nil)
 CreateSidebarDivider()
 local aboutContent = CreateContentFrame("About", 610)
 
-local aboutTitle = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-aboutTitle:SetPoint("TOP", 0, -24)
-aboutTitle:SetText("WaffleOptions")
-aboutTitle:SetTextColor(unpack(C.accent))
-
-local aboutVer = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-aboutVer:SetPoint("TOP", aboutTitle, "BOTTOM", 0, -6)
-aboutVer:SetText("@project-version@  |  Interface 12.0.1  |  by Waffle Taco")
-aboutVer:SetTextColor(unpack(C.textDim))
-
 local aboutLogo = aboutContent:CreateTexture(nil, "ARTWORK")
 aboutLogo:SetSize(128, 128)
-aboutLogo:SetPoint("TOP", aboutVer, "BOTTOM", 0, -14)
+aboutLogo:SetPoint("TOP", 0, -24)
 aboutLogo:SetTexture("Interface\\AddOns\\WaffleOptions\\WaffleOptions")
 aboutLogo:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 
+local aboutVer = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+aboutVer:SetPoint("TOP", aboutLogo, "BOTTOM", 0, -10)
+local addonVersion = "@project-version@"
+if addonVersion:find("project%-version") then addonVersion = "Dev" end
+aboutVer:SetText(addonVersion .. "  |  Interface 12.0.1  |  by Waffle Taco")
+aboutVer:SetTextColor(unpack(C.textDim))
+
 local aboutDesc = aboutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-aboutDesc:SetPoint("TOP", aboutLogo, "BOTTOM", 0, -14)
+aboutDesc:SetPoint("TOP", aboutVer, "BOTTOM", 0, -14)
 aboutDesc:SetWidth(PANEL_WIDTH - SIDEBAR_WIDTH - PAD * 2 - 30)
 aboutDesc:SetJustifyH("CENTER")
 aboutDesc:SetWordWrap(true)
@@ -1163,7 +1160,7 @@ CreateSidebarSection("General")
 
 do -- Interface
     CreateCategoryButton("Interface", "General")
-    local f = CreateContentFrame("Interface", 340)
+    local f = CreateContentFrame("Interface", 480)
     local y = CreateSectionHeader(f, "Cutscenes", -PAD)
     local skipCB, y = CreateCheckbox(f, "Auto-skip cutscenes", y, "skipCutscenes")
     local onlyWatchedCB, y = CreateCheckbox(f, "Only skip already-watched cutscenes", y, "skipCutscenesOnlyWatched", SUB_PAD)
@@ -1179,6 +1176,13 @@ do -- Interface
     local _, y = CreateCheckbox(f, "Auto-hide World Map on combat start", y, "combatHideMap")
     local _, y = CreateCheckbox(f, "Auto-close bags on combat start", y, "combatHideBags")
     CreateDescription(f, "Automatically closes these UI panels when you enter combat to keep your screen clear.", y - 4)
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Minimap", y)
+    local mmCB, y = CreateCheckbox(f, "Show minimap icon", y, "minimapIcon")
+    mmCB.onChanged = function()
+        if WaffleOptions.UpdateMinimapIcon then WaffleOptions.UpdateMinimapIcon() end
+    end
+    local _, y = CreateCheckbox(f, "Show login message", y, "showLoginMessage")
 end
 
 do -- Repair & Sell
@@ -1211,13 +1215,38 @@ do -- Repair & Sell
 end
 
 do -- Mail
-    CreateCategoryButton("Mail", "General")
-    local f = CreateContentFrame("Mail", 220)
+    CreateCategoryButton("Bank & Mail", "General")
+    local f = CreateContentFrame("Bank & Mail", 620)
     local y = CreateSectionHeader(f, "Auto-Collect Mail", -PAD)
     local _, y = CreateCheckbox(f, "Enable Auto-Collect mail", y, "autoMailEnabled")
     local _, y = CreateCheckbox(f, "Show collected gold in chat", y, "autoMailChat")
     local _, y = CreateCheckbox(f, "Auto-delete empty mail", y, "autoMailDeleteEmpty")
     CreateDescription(f, "Automatically collects items and gold from your mailbox when opened. COD mail is always skipped.", y - 6)
+
+    y = y - SEC_GAP * 3
+    y = CreateSectionHeader(f, "Auto-Deposit Reagents", y)
+    local reagentCB, y = CreateCheckbox(f, "Auto-deposit reagents when opening bank", y, "autoDepositReagents")
+    local reagentChat, y = CreateCheckbox(f, "Show deposit message in chat", y, "autoDepositReagentsChat", SUB_PAD)
+    local function UR() reagentChat:SetDisabled(not WaffleOptionsDB.autoDepositReagents) end
+    reagentCB.onChanged = UR; f:HookScript("OnShow", UR)
+    CreateDescription(f, "Automatically deposits reagent-type items into your bank when you open it.", y - 6)
+
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Auto-Deposit to Warband Bank", y)
+    local warbankCB, y = CreateCheckbox(f, "Enable auto-deposit to Warband Bank", y, "autoWarbankEnabled")
+    local wbReag, y = CreateCheckbox(f, "Reagents", y, "autoWarbankReagents", SUB_PAD)
+    local wbCons, y = CreateCheckbox(f, "Consumables", y, "autoWarbankConsumables", SUB_PAD)
+    local wbTrade, y = CreateCheckbox(f, "Trade Goods", y, "autoWarbankTradeGoods", SUB_PAD)
+    local wbEquip, y = CreateCheckbox(f, "Equipment", y, "autoWarbankEquipment", SUB_PAD)
+    local wbQuest, y = CreateCheckbox(f, "Quest Items", y, "autoWarbankQuestItems", SUB_PAD)
+    local wbChat, y = CreateCheckbox(f, "Show deposit summary in chat", y, "autoWarbankChat", SUB_PAD)
+    local function UW()
+        local off = not WaffleOptionsDB.autoWarbankEnabled
+        wbReag:SetDisabled(off); wbCons:SetDisabled(off); wbTrade:SetDisabled(off)
+        wbEquip:SetDisabled(off); wbQuest:SetDisabled(off); wbChat:SetDisabled(off)
+    end
+    warbankCB.onChanged = UW; f:HookScript("OnShow", UW)
+    CreateDescription(f, "Deposits matching items from your bags into the Warband Bank when you open it. Only triggers when viewing the Warband Bank tab.", y - 6)
 end
 
 do -- Summon
@@ -1342,6 +1371,31 @@ do -- Achievements
     CreateStringList(f, "Messages (one is chosen at random, {player} = their name)", y, "achieveGratsMessages")
 end
 
+do -- Social
+    CreateCategoryButton("Social", "General")
+    local f = CreateContentFrame("Social", 380)
+    local y = CreateSectionHeader(f, "Auto-Decline Duels", -PAD)
+    local duelCB, y = CreateCheckbox(f, "Auto-decline duel requests", y, "autoDuelDecline")
+    local duelFriendsCB, y = CreateCheckbox(f, "Allow duels from friends", y, "autoDuelAllowFriends", SUB_PAD)
+    local duelGuildCB, y = CreateCheckbox(f, "Allow duels from guildmates", y, "autoDuelAllowGuild", SUB_PAD)
+    local function UD()
+        local off = not WaffleOptionsDB.autoDuelDecline
+        duelFriendsCB:SetDisabled(off); duelGuildCB:SetDisabled(off)
+    end
+    duelCB.onChanged = UD; f:HookScript("OnShow", UD)
+    CreateDescription(f, "Automatically declines duel requests. Allowed players will see the normal duel popup.", y - 4)
+
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Auto-Decline Guild Invites", y)
+    local guildCB, y = CreateCheckbox(f, "Auto-decline guild invitations", y, "autoGuildDecline")
+    local guildFriendsCB, y = CreateCheckbox(f, "Allow invites from friends", y, "autoGuildAllowFriends", SUB_PAD)
+    local function UG()
+        guildFriendsCB:SetDisabled(not WaffleOptionsDB.autoGuildDecline)
+    end
+    guildCB.onChanged = UG; f:HookScript("OnShow", UG)
+    CreateDescription(f, "Automatically declines guild invitations. Useful if you frequently receive unwanted guild spam.", y - 4)
+end
+
 -------------------------------------------------
 -- Dungeons & Raids Section
 -------------------------------------------------
@@ -1372,33 +1426,43 @@ do -- Keystones
     resultCB.onChanged = U; f:HookScript("OnShow", U)
 end
 
-do -- Completion Message
-    CreateCategoryButton("Completion", "Dungeons & Raids")
-    local f = CreateContentFrame("Completion", 520)
-    local y = CreateSectionHeader(f, "Completion Message", -PAD)
-    local ggCB, y = CreateCheckbox(f, "Send message on completion", y, "dungeonAutoGG")
-    local ggM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
-    local ggR, y = CreateCheckbox(f, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
-    local ggRaid, y = CreateCheckbox(f, "Trigger on raid boss kill", y, "dungeonGGRaidBoss", SUB_PAD)
-    local _, y = CreateTextInput(f, "Message", y - 4, 390, "dungeonGGMessage")
-    local _, y = CreateTextInput(f, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
-    local function UG()
-        local off = not WaffleOptionsDB.dungeonAutoGG
-        ggM:SetDisabled(off); ggR:SetDisabled(off); ggRaid:SetDisabled(off)
-    end
-    ggCB.onChanged = UG; f:HookScript("OnShow", UG)
+do -- Announcements
+    CreateCategoryButton("Announcements", "Dungeons & Raids")
+    local f = CreateContentFrame("Announcements", 860)
+    local y = CreateSectionHeader(f, "Group Announcements", -PAD)
+    local _, y = CreateCheckbox(f, "Announce Mage Table", y, "dungeonAnnounceMageTable")
+    local _, y = CreateCheckbox(f, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
+    local _, y = CreateCheckbox(f, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonAnnounceChannel")
+
     y = y - SEC_GAP * 2
-    y = CreateSectionHeader(f, "Auto-Leave Instance", y)
-    local leaveCB, y = CreateCheckbox(f, "Automatically leave group after completion", y, "autoLeaveEnabled")
-    local leaveM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "autoLeaveMythicPlus", SUB_PAD)
-    local leaveR, y = CreateCheckbox(f, "Trigger on regular dungeon completion", y, "autoLeaveRegular", SUB_PAD)
-    local _, y = CreateTextInput(f, "Delay (seconds)", y - 4, 120, "autoLeaveDelay")
-    CreateDescription(f, "Type /wafflecancel to abort the auto-leave countdown. Disabled by default for safety.", y - 4)
-    local function UL()
-        local off = not WaffleOptionsDB.autoLeaveEnabled
-        leaveM:SetDisabled(off); leaveR:SetDisabled(off)
-    end
-    leaveCB.onChanged = UL; f:HookScript("OnShow", UL)
+    y = CreateSectionHeader(f, "Interrupt Announcements", y)
+    local _, y = CreateCheckbox(f, "Announce your successful interrupts", y, "dungeonInterruptAnnounce")
+    local _, y = CreateTextInput(f, "Message  ({spell} is replaced with interrupt name)", y - 4, 390, "dungeonInterruptMsg")
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Interrupt Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonInterruptChannel")
+    CreateDescription(f, "Announces your own interrupts only. Cannot detect group member interrupts due to WoW API restrictions.", y - 20)
+
+    y = y - SEC_GAP * 2
+    y = CreateSectionHeader(f, "Dispel / Purge Announcements", y)
+    local _, y = CreateCheckbox(f, "Announce your successful dispels", y, "dungeonDispelAnnounce")
+    local _, y = CreateTextInput(f, "Message  ({spell} is replaced with dispel name)", y - 4, 390, "dungeonDispelMsg")
+    y = y - SEC_GAP
+    local _, y = CreateRadioGroup(f, y, "Dispel Channel", {
+        { label = "Print (local chat only)", value = "print" },
+        { label = "Emote", value = "emote" },
+        { label = "Party / Raid / Instance", value = "group" },
+    }, "dungeonDispelChannel")
+    CreateDescription(f, "Announces your dispels and purges. Includes friendly dispels (Cleanse, Purify, etc.) and offensive dispels (Purge, Spellsteal).", y - 20)
 end
 
 do -- Spec & Talents
@@ -1475,31 +1539,33 @@ do -- Ready Check
     CreateDescription(f, "Automatically accepts role checks with your current selected role.", y - 4)
 end
 
-do -- Announcements
-    CreateCategoryButton("Announcements", "Dungeons & Raids")
-    local f = CreateContentFrame("Announcements", 610)
-    local y = CreateSectionHeader(f, "Group Announcements", -PAD)
-    local _, y = CreateCheckbox(f, "Announce Mage Table", y, "dungeonAnnounceMageTable")
-    local _, y = CreateCheckbox(f, "Announce Warlock Summoning Stone", y, "dungeonAnnounceWarlock")
-    local _, y = CreateCheckbox(f, "Announce Feast / Buffet", y, "dungeonAnnounceFeast")
-    y = y - SEC_GAP
-    local _, y = CreateRadioGroup(f, y, "Announcement Channel", {
-        { label = "Print (local chat only)", value = "print" },
-        { label = "Emote", value = "emote" },
-        { label = "Party / Raid / Instance", value = "group" },
-    }, "dungeonAnnounceChannel")
-
+do -- Completion Message
+    CreateCategoryButton("Completion", "Dungeons & Raids")
+    local f = CreateContentFrame("Completion", 520)
+    local y = CreateSectionHeader(f, "Completion Message", -PAD)
+    local ggCB, y = CreateCheckbox(f, "Send message on completion", y, "dungeonAutoGG")
+    local ggM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "dungeonGGMythicPlus", SUB_PAD)
+    local ggR, y = CreateCheckbox(f, "Trigger on regular dungeon completion", y, "dungeonGGRegular", SUB_PAD)
+    local ggRaid, y = CreateCheckbox(f, "Trigger on raid boss kill", y, "dungeonGGRaidBoss", SUB_PAD)
+    local _, y = CreateTextInput(f, "Message", y - 4, 390, "dungeonGGMessage")
+    local _, y = CreateTextInput(f, "Delay (seconds, 0 = instant)", y - 4, 120, "dungeonGGDelay")
+    local function UG()
+        local off = not WaffleOptionsDB.dungeonAutoGG
+        ggM:SetDisabled(off); ggR:SetDisabled(off); ggRaid:SetDisabled(off)
+    end
+    ggCB.onChanged = UG; f:HookScript("OnShow", UG)
     y = y - SEC_GAP * 2
-    y = CreateSectionHeader(f, "Interrupt Announcements", y)
-    local _, y = CreateCheckbox(f, "Announce your successful interrupts", y, "dungeonInterruptAnnounce")
-    local _, y = CreateTextInput(f, "Message  ({spell} is replaced with interrupt name)", y - 4, 390, "dungeonInterruptMsg")
-    y = y - SEC_GAP
-    local _, y = CreateRadioGroup(f, y, "Interrupt Channel", {
-        { label = "Print (local chat only)", value = "print" },
-        { label = "Emote", value = "emote" },
-        { label = "Party / Raid / Instance", value = "group" },
-    }, "dungeonInterruptChannel")
-    CreateDescription(f, "Announces your own interrupts only. Cannot detect group member interrupts due to WoW API restrictions.", y - 20)
+    y = CreateSectionHeader(f, "Auto-Leave Instance", y)
+    local leaveCB, y = CreateCheckbox(f, "Automatically leave group after completion", y, "autoLeaveEnabled")
+    local leaveM, y = CreateCheckbox(f, "Trigger on M+ completion", y, "autoLeaveMythicPlus", SUB_PAD)
+    local leaveR, y = CreateCheckbox(f, "Trigger on regular dungeon completion", y, "autoLeaveRegular", SUB_PAD)
+    local _, y = CreateTextInput(f, "Delay (seconds)", y - 4, 120, "autoLeaveDelay")
+    CreateDescription(f, "Type /wafflecancel to abort the auto-leave countdown. Disabled by default for safety.", y - 4)
+    local function UL()
+        local off = not WaffleOptionsDB.autoLeaveEnabled
+        leaveM:SetDisabled(off); leaveR:SetDisabled(off)
+    end
+    leaveCB.onChanged = UL; f:HookScript("OnShow", UL)
 end
 
 -------------------------------------------------

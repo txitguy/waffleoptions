@@ -70,9 +70,9 @@ local defaults = {
     autoPartyGuild = true,
     -- Party Greetings
     partyGreetOnJoin = true,
-    partyGreetOnJoinMessages = { "Hey everyone!", "Hello!", "Hi all!", "Howdy!" },
+    partyGreetOnJoinMessages = { "o/", "hey", "howdy", "hello" },
     partyGreetOnMemberJoin = true,
-    partyGreetOnMemberJoinMessages = { "Welcome {player}!", "Hey {player}!", "Hello {player}!" },
+    partyGreetOnMemberJoinMessages = { "o/", "welcome, {player}", "hey, {player}", "howdy, {player}" },
     -- Auto-Release Spirit
     autoReleaseEnabled = true,
     autoReleaseDelay = 2,
@@ -83,16 +83,16 @@ local defaults = {
     -- Gossip Skip
     autoGossipSkip = true,
     -- Auto-Screenshot
-    autoScreenshotEnabled = false,
+    autoScreenshotEnabled = true,
     autoScreenshotAchievement = true,
-    autoScreenshotBossKill = true,
-    autoScreenshotLevelUp = true,
+    autoScreenshotBossKill = false,
+    autoScreenshotLevelUp = false,
     autoScreenshotDelay = 1,
     autoScreenshotChat = true,
     -- Achievement Congratulations
     achieveGratsParty = true,
     achieveGratsGuild = true,
-    achieveGratsMessages = { "Grats {player}!", "Congrats {player}!", "Nice one {player}!", "Well done {player}!" },
+    achieveGratsMessages = { "grats, {player}!", "congrats, {player}!", "nice one, {player}!", "well done, {player}!" },
     -- Auto-Confirm Loot
     autoConfirmLoot = true,
     -- Auto-Fill Delete
@@ -124,6 +124,31 @@ local defaults = {
     dungeonLootSpecSound = false,
     dungeonLootSpecSoundID = 15391,
     dungeonLootSpecChannel = "group",
+    -- Dispel/Purge Announcements
+    dungeonDispelAnnounce = false,
+    dungeonDispelMsg = "Dispelled with {spell}!",
+    dungeonDispelChannel = "group",
+    -- Auto-Decline Duels
+    autoDuelDecline = true,
+    autoDuelAllowFriends = true,
+    autoDuelAllowGuild = true,
+    -- Auto-Decline Guild Invites
+    autoGuildDecline = true,
+    autoGuildAllowFriends = true,
+    -- Auto-Deposit Reagents
+    autoDepositReagents = false,
+    autoDepositReagentsChat = true,
+    -- Auto-Deposit Warbank
+    autoWarbankEnabled = true,
+    autoWarbankReagents = true,
+    autoWarbankConsumables = false,
+    autoWarbankTradeGoods = true,
+    autoWarbankEquipment = true,
+    autoWarbankQuestItems = false,
+    autoWarbankChat = true,
+    -- Minimap Icon
+    minimapIcon = true,
+    minimapIconPos = 220,
 }
 
 WaffleOptions.defaults = defaults
@@ -140,6 +165,85 @@ local function InitDB()
     end
 end
 InitDB()
+
+-- Minimap Icon
+local minimapButton = CreateFrame("Button", "WaffleOptionsMinimapButton", Minimap)
+minimapButton:SetSize(32, 32)
+minimapButton:SetFrameStrata("MEDIUM")
+minimapButton:SetFrameLevel(8)
+minimapButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+local overlay = minimapButton:CreateTexture(nil, "OVERLAY")
+overlay:SetSize(54, 54)
+overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+overlay:SetPoint("TOPLEFT")
+
+local icon = minimapButton:CreateTexture(nil, "BACKGROUND")
+icon:SetSize(20, 20)
+icon:SetTexture("Interface\\Icons\\INV_Misc_Food_100") -- Waffle icon
+icon:SetPoint("CENTER", 0, 0)
+
+local function UpdateMinimapPosition()
+    local angle = math.rad(WaffleOptionsDB.minimapIconPos or 220)
+    local x = 80 * math.cos(angle)
+    local y = 80 * math.sin(angle)
+    minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
+end
+
+-- Dragging support
+local isDragging = false
+minimapButton:RegisterForDrag("LeftButton")
+minimapButton:SetScript("OnDragStart", function(self)
+    isDragging = true
+    self:SetScript("OnUpdate", function(self)
+        local mx, my = Minimap:GetCenter()
+        local cx, cy = GetCursorPosition()
+        local scale = UIParent:GetEffectiveScale()
+        cx, cy = cx / scale, cy / scale
+        local angle = math.deg(math.atan2(cy - my, cx - mx))
+        WaffleOptionsDB.minimapIconPos = angle
+        UpdateMinimapPosition()
+    end)
+end)
+minimapButton:SetScript("OnDragStop", function(self)
+    isDragging = false
+    self:SetScript("OnUpdate", nil)
+end)
+
+minimapButton:SetScript("OnClick", function(self, button)
+    if InCombatLockdown() then
+        print("|cff88cc88[WaffleOptions]|r Options panel cannot be opened during combat.")
+        return
+    end
+    if WaffleOptions.ToggleOptions then
+        WaffleOptions.ToggleOptions()
+    end
+end)
+minimapButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("WaffleOptions", 0.53, 0.8, 0.53)
+    GameTooltip:AddLine("Click to open options", 0.8, 0.8, 0.8)
+    GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5)
+    GameTooltip:Show()
+end)
+minimapButton:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+end)
+
+local function UpdateMinimapIcon()
+    if WaffleOptionsDB.minimapIcon then
+        minimapButton:Show()
+        UpdateMinimapPosition()
+    else
+        minimapButton:Hide()
+    end
+end
+
+-- Expose for Options.lua
+WaffleOptions.UpdateMinimapIcon = UpdateMinimapIcon
+
+-- Initial update after DB is ready
+UpdateMinimapIcon()
 
 -- Auto-sell gray items
 local function AutoSellGrayItems()
@@ -339,18 +443,18 @@ local function HandleSummon()
     -- Chat on receive (only if auto-accept is OFF to prevent spam)
     if not WaffleOptionsDB.autoSummonEnabled and WaffleOptionsDB.autoSummonChatOnReceive and chatEnabled then
         local msg = FormatSummonMsg(WaffleOptionsDB.autoSummonReceiveMsg, summoner, location)
-        SendChatMessage(msg, channel)
+        C_Timer.After(0, function() pcall(SendChatMessage, msg, channel) end)
     end
 
     -- Auto-accept
     if WaffleOptionsDB.autoSummonEnabled then
-        C_SummonInfo.ConfirmSummon()
+        pcall(C_SummonInfo.ConfirmSummon)
         print("|cff88cc88[WaffleOptions]|r Auto-accepted summon to " .. location .. " from " .. summoner .. ".")
 
         -- Chat on accept
         if WaffleOptionsDB.autoSummonChatOnAccept and chatEnabled then
             local msg = FormatSummonMsg(WaffleOptionsDB.autoSummonAcceptMsg, summoner, location)
-            SendChatMessage(msg, channel)
+            C_Timer.After(0, function() pcall(SendChatMessage, msg, channel) end)
         end
     end
 end
@@ -383,7 +487,7 @@ local function HandleResurrect(casterName)
         local channel, groupType = GetGroupChatChannel()
         if channel and groupType and IsResChatEnabledForGroup(groupType) then
             local msg = WaffleOptionsDB.autoResAcceptMsg:gsub("{caster}", caster)
-            SendChatMessage(msg, channel)
+            C_Timer.After(0, function() pcall(SendChatMessage, msg, channel) end)
         end
     end
 end
@@ -486,13 +590,21 @@ end
 -- Dungeon: End of dungeon message
 local function SendDungeonGG()
     if not WaffleOptionsDB.dungeonAutoGG then return end
-    local channel = GetGroupChatChannel()
-    if not channel then return end
     local msg = WaffleOptionsDB.dungeonGGMessage or "gg"
     local delay = tonumber(WaffleOptionsDB.dungeonGGDelay) or 0
     C_Timer.After(delay, function()
         if IsInGroup() then
-            SendChatMessage(msg, channel)
+            local channel = GetGroupChatChannel()
+            if channel then
+                local ok, err = pcall(SendChatMessage, msg, channel)
+                if not ok then
+                    print("|cff88cc88[WaffleOptions]|r GG message blocked: " .. tostring(err))
+                end
+            else
+                print("|cff88cc88[WaffleOptions]|r GG: no chat channel found")
+            end
+        else
+            print("|cff88cc88[WaffleOptions]|r GG: not in group")
         end
     end)
 end
@@ -611,10 +723,25 @@ end
 
 local function HandleEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
     if success ~= 1 then return end
-    -- GG message for raid bosses
     local _, instanceType = GetInstanceInfo()
+    -- GG message for raid bosses
     if WaffleOptionsDB.dungeonGGRaidBoss and instanceType == "raid" then
         SendDungeonGG()
+    end
+    -- GG message for regular dungeon last boss (mythic 0, heroic, etc. that don't trigger LFG_COMPLETION_REWARD)
+    if WaffleOptionsDB.dungeonGGRegular and instanceType == "party" then
+        C_Timer.After(1, function()
+            local info = C_Scenario.GetInfo()
+            local isComplete = info and info.isComplete
+            -- Fallback: try legacy return format
+            if not isComplete and type(info) == "string" then
+                local _, _, _, _, _, hasBonusStep, isBonusStepComplete, _, _, _, isCompleted = C_Scenario.GetInfo()
+                isComplete = isCompleted
+            end
+            if isComplete then
+                SendDungeonGG()
+            end
+        end)
     end
     -- Auto-screenshot on boss kill
     if WaffleOptionsDB.autoScreenshotEnabled and WaffleOptionsDB.autoScreenshotBossKill then
@@ -633,14 +760,13 @@ local function SendToChannel(channelSetting, msg)
     if channelSetting == "print" then
         print(msg)
     elseif channelSetting == "emote" then
-        -- Strip color codes for emote
         local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|", "")
-        SendChatMessage(clean, "EMOTE")
+        pcall(SendChatMessage, clean, "EMOTE")
     elseif channelSetting == "group" then
         local channel = GetGroupChatChannel()
         if channel then
             local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|", "")
-            SendChatMessage(clean, channel)
+            pcall(SendChatMessage, clean, channel)
         else
             print(msg)
         end
@@ -987,6 +1113,25 @@ local function HandlePartyInvite(inviterName)
     end
 end
 
+-- Auto-Decline Duels
+local function HandleDuelRequested(playerName)
+    if not WaffleOptionsDB.autoDuelDecline then return end
+    if WaffleOptionsDB.autoDuelAllowFriends and IsPlayerFriend(playerName) then return end
+    if WaffleOptionsDB.autoDuelAllowGuild and IsPlayerGuildmate(playerName) then return end
+    pcall(CancelDuel)
+    StaticPopup_Hide("DUEL_REQUESTED")
+    print("|cff88cc88[WaffleOptions]|r Auto-declined duel from " .. playerName .. ".")
+end
+
+-- Auto-Decline Guild Invites
+local function HandleGuildInviteRequest(inviterName, guildName)
+    if not WaffleOptionsDB.autoGuildDecline then return end
+    if WaffleOptionsDB.autoGuildAllowFriends and IsPlayerFriend(inviterName) then return end
+    pcall(DeclineGuild)
+    StaticPopup_Hide("GUILD_INVITE")
+    print("|cff88cc88[WaffleOptions]|r Auto-declined guild invite from " .. inviterName .. " (" .. (guildName or "Unknown") .. ").")
+end
+
 -- Party Greetings
 local function SendRandomGreeting(dbKey, replacements)
     local messages = WaffleOptionsDB[dbKey]
@@ -1226,6 +1371,87 @@ local function SetupAutoFillDelete()
     end
 end
 
+-- Auto-Deposit Reagents & Warbank
+local WARBANK_ITEM_CLASSES = {
+    autoWarbankReagents    = 5,   -- Reagent
+    autoWarbankConsumables = 0,   -- Consumable
+    autoWarbankTradeGoods  = 7,   -- Tradeskill
+    autoWarbankQuestItems  = 12,  -- Quest
+}
+
+local function HandleWarbankDeposit()
+    if not WaffleOptionsDB.autoWarbankEnabled then return end
+
+    -- Build set of enabled item class IDs
+    local enabledClasses = {}
+    for dbKey, classID in pairs(WARBANK_ITEM_CLASSES) do
+        if WaffleOptionsDB[dbKey] then
+            enabledClasses[classID] = true
+        end
+    end
+    -- Equipment includes both Weapon (2) and Armor (4)
+    if WaffleOptionsDB.autoWarbankEquipment then
+        enabledClasses[2] = true
+        enabledClasses[4] = true
+    end
+
+    -- Collect items to move (need to cache item info first)
+    local toMove = {}
+    for bag = 0, 4 do
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.itemID then
+                local itemLocation = ItemLocation:CreateFromBagAndSlot(bag, slot)
+                if C_Item.DoesItemExist(itemLocation) then
+                    local classID = select(6, C_Item.GetItemInfoInstant(info.itemID))
+                    if classID and enabledClasses[classID] then
+                        table.insert(toMove, {bag = bag, slot = slot})
+                    end
+                end
+            end
+        end
+    end
+
+    -- Move items one at a time with delay to avoid issues
+    local moved = 0
+    local function MoveNext(index)
+        if index > #toMove then
+            if moved > 0 and WaffleOptionsDB.autoWarbankChat then
+                print("|cff88cc88[WaffleOptions]|r Deposited " .. moved .. " item(s) to Warband Bank.")
+            end
+            return
+        end
+        local item = toMove[index]
+        local ok = pcall(C_Container.UseContainerItem, item.bag, item.slot)
+        if ok then moved = moved + 1 end
+        C_Timer.After(0.1, function() MoveNext(index + 1) end)
+    end
+    MoveNext(1)
+end
+
+local function HandleBankOpened(bankType)
+    -- Auto-deposit reagents
+    if WaffleOptionsDB.autoDepositReagents then
+        C_Timer.After(0.3, function()
+            local success = pcall(function()
+                if C_Bank and C_Bank.AutoDepositItemsIntoBank then
+                    C_Bank.AutoDepositItemsIntoBank(Enum.BankType.Account)
+                elseif DepositReagentBank then
+                    DepositReagentBank()
+                end
+            end)
+            if success and WaffleOptionsDB.autoDepositReagentsChat then
+                print("|cff88cc88[WaffleOptions]|r Deposited reagents to bank.")
+            end
+        end)
+    end
+
+    -- Auto-deposit to Warband Bank
+    if bankType and Enum.BankType and bankType == Enum.BankType.Account then
+        C_Timer.After(0.5, HandleWarbankDeposit)
+    end
+end
+
 -- Auto Role Check
 local function HandleRoleCheckShow()
     if not WaffleOptionsDB.autoRoleCheck then return end
@@ -1257,6 +1483,34 @@ local INTERRUPT_SPELLS = {
     [187707] = "Muzzle",           -- Hunter
 }
 
+-- Dispel/Purge Announcements
+local DISPEL_SPELLS = {
+    -- Friendly dispels
+    [528]    = "Dispel Magic",      -- Priest
+    [527]    = "Purify",            -- Priest (Holy)
+    [4987]   = "Cleanse",           -- Paladin
+    [88423]  = "Nature's Cure",     -- Druid (Resto)
+    [2782]   = "Remove Corruption", -- Druid
+    [77130]  = "Purify Spirit",     -- Shaman (Resto)
+    [152262] = "Cleanse Toxins",    -- Paladin (non-Holy)
+    [115450] = "Detox",             -- Monk
+    [32375]  = "Mass Dispel",       -- Priest
+    -- Offensive dispels / purges
+    [370]    = "Purge",             -- Shaman
+    [30449]  = "Spellsteal",        -- Mage
+    [278326] = "Consume Magic",     -- Demon Hunter
+    -- Arcane Torrent (racial, multiple spell IDs per class)
+    [28730]  = "Arcane Torrent",
+    [25046]  = "Arcane Torrent",
+    [50613]  = "Arcane Torrent",
+    [69179]  = "Arcane Torrent",
+    [80483]  = "Arcane Torrent",
+    [129597] = "Arcane Torrent",
+    [155145] = "Arcane Torrent",
+    [202719] = "Arcane Torrent",
+    [232633] = "Arcane Torrent",
+}
+
 -- Group utility announcements (mage table, warlock summon, feasts)
 local MAGE_TABLE_SPELL = 190336   -- Conjure Refreshment Table
 local WARLOCK_SUMMON_SPELL = 698  -- Ritual of Summoning
@@ -1279,6 +1533,9 @@ local FEAST_SPELLS = {
 }
 
 local function HandleSpellcastSucceeded(unit, _, spellID)
+    -- In instance content, spellID may be a "secret" value that errors on table lookup
+    -- Wrap in pcall to silently handle secret values
+    local ok = pcall(function()
     -- Interrupt announcements (player only)
     if (unit == "player" or unit == "pet") and WaffleOptionsDB.dungeonInterruptAnnounce then
         local interruptName = INTERRUPT_SPELLS[spellID]
@@ -1286,6 +1543,17 @@ local function HandleSpellcastSucceeded(unit, _, spellID)
             local msg = (WaffleOptionsDB.dungeonInterruptMsg or "Interrupted with {spell}!"):gsub("{spell}", interruptName)
             C_Timer.After(0, function()
                 SendToChannel(WaffleOptionsDB.dungeonInterruptChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
+            end)
+        end
+    end
+
+    -- Dispel/Purge announcements (player only)
+    if (unit == "player") and WaffleOptionsDB.dungeonDispelAnnounce then
+        local dispelName = DISPEL_SPELLS[spellID]
+        if dispelName then
+            local msg = (WaffleOptionsDB.dungeonDispelMsg or "Dispelled with {spell}!"):gsub("{spell}", dispelName)
+            C_Timer.After(0, function()
+                SendToChannel(WaffleOptionsDB.dungeonDispelChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
             end)
         end
     end
@@ -1320,6 +1588,7 @@ local function HandleSpellcastSucceeded(unit, _, spellID)
             SendToChannel(WaffleOptionsDB.dungeonAnnounceChannel, "|cff88cc88[WaffleOptions]|r " .. msg)
         end)
     end
+    end) -- end pcall
 end
 
 -- Event handling
@@ -1357,6 +1626,9 @@ frame:RegisterEvent("PLAYER_LEVEL_UP")
 frame:RegisterEvent("CONFIRM_LOOT_ROLL")
 frame:RegisterEvent("LOOT_BIND_CONFIRM")
 frame:RegisterEvent("LFG_ROLE_CHECK_SHOW")
+frame:RegisterEvent("DUEL_REQUESTED")
+frame:RegisterEvent("GUILD_INVITE_REQUEST")
+frame:RegisterEvent("BANKFRAME_OPENED")
 frame:SetScript("OnEvent", function(self, event, ...)
     local arg1, arg2, arg3, arg4, arg5 = ...
     if event == "ADDON_LOADED" then
@@ -1436,6 +1708,12 @@ frame:SetScript("OnEvent", function(self, event, ...)
         HandleLootBindConfirm(arg1)
     elseif event == "LFG_ROLE_CHECK_SHOW" then
         HandleRoleCheckShow()
+    elseif event == "DUEL_REQUESTED" then
+        HandleDuelRequested(arg1)
+    elseif event == "GUILD_INVITE_REQUEST" then
+        HandleGuildInviteRequest(arg1, arg2)
+    elseif event == "BANKFRAME_OPENED" then
+        HandleBankOpened(arg1)
     end
 end)
 

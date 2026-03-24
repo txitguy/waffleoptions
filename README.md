@@ -16,7 +16,7 @@ Visit our discord for support, bug reports, and feature requests: [https://disco
 
 *   **Cutscene Skip** — Skips previously watched cutscenes automatically
 *   **Hide Talking Head** — Suppresses Talking Head popups
-*   **Combat Auto-Hide** — Closes the World Map and bags when entering combat
+*   **Combat Auto-Hide** — Closes the World Map, bags, and options panel when entering combat
 
 ### Repair & Sell
 
@@ -25,9 +25,11 @@ Visit our discord for support, bug reports, and feature requests: [https://disco
 *   **Auto-Confirm Loot** — Skips Need/Greed and Bind-on-Pickup confirmation dialogs
 *   **Auto-Fill Delete** — Pre-fills the "DELETE" text when destroying items (you still click confirm)
 
-### Mail
+### Bank & Mail
 
 *   **Auto-Collect Mail** — Collects all items and gold from your mailbox, optionally deletes empty mail
+*   **Auto-Deposit Reagents** — Automatically deposits reagent items into your bank when you open it
+*   **Auto-Deposit Warband Bank** — Deposits matching items to your Warband Bank by category (reagents, consumables, trade goods, equipment, quest items)
 
 ### Summon
 
@@ -54,6 +56,11 @@ Visit our discord for support, bug reports, and feature requests: [https://disco
 *   **Auto-Screenshot** — Takes screenshots on achievements, boss kills, and level-ups with a configurable delay
 *   **Achievement Congratulations** — Sends a random congratulatory message to party and/or guild members when they earn achievements, with customizable messages
 
+### Social
+
+*   **Auto-Decline Duels** — Automatically declines duel requests, with options to allow duels from friends and/or guildmates
+*   **Auto-Decline Guild Invites** — Automatically declines guild invitations, with an option to allow invites from friends
+
 ***
 
 ## Dungeons & Raids
@@ -66,7 +73,7 @@ Visit our discord for support, bug reports, and feature requests: [https://disco
 *   **Keystone Change Alert** — Notifies you when your keystone changes (after trading or completion)
 *   **Key Result** — Reports whether your key upgraded or depleted, with optional alert sound on depletion
 
-### Completion Message
+### Completion
 
 *   **End-of-Dungeon/Raid Message** — Sends a customizable message (default: "gg") at the end of M+ runs, regular dungeons, and raid boss kills
 *   **Auto-Leave Instance** — Optionally leaves the group after dungeon completion with a cancellable countdown
@@ -85,6 +92,7 @@ Visit our discord for support, bug reports, and feature requests: [https://disco
 
 *   **Group Announcements** — Announces when someone places a Mage Table, Warlock Summoning Stone, or feast/buffet
 *   **Interrupt Announcements** — Announces your successful interrupts with a customizable message using `{spell}` placeholder
+*   **Dispel / Purge Announcements** — Announces your successful dispels and purges (friendly and offensive) with a customizable message using `{spell}` placeholder
 
 ***
 

@@ -24,7 +24,7 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 - Left sidebar has section headers (non-interactive labels) with category sub-items; right side shows settings for the selected category
 - Sidebar uses dynamic layout: `sidebarItems` ordered list + `LayoutSidebar()` positions all items
 - `CreateSidebarSection(name)` creates a static section header label; `CreateCategoryButton(name, section)` creates a category item under a section (or top-level if section is nil)
-- Sections: "General" (Interface, Repair & Sell, Mail, Summon, Resurrect, Party, Death, Quests, Screenshots) and "Dungeons & Raids" (Keystones, Completion Msg, Spec & Talents, Ready Check, Announcements, Combat Res, Interrupts)
+- Sections: "General" (Interface, Repair & Sell, Bank & Mail, Summon, Resurrect, Party, Quests, Achievements, Social) and "Dungeons & Raids" (Keystones, Completion, Spec & Talents, Ready Check, Announcements)
 - Helper functions `CreateCheckbox`, `CreateRadioGroup`, `CreateTextInput`, and `CreateSoundPicker` are used to build settings UI tied to `WaffleOptionsDB` keys
 - When adding a new category: use `CreateCategoryButton(name, section)` and `CreateContentFrame(name)`, then populate the content frame with controls
 
@@ -68,6 +68,30 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `autoMailChat` (bool, default: true) — Whether to print collected gold/items summary to chat
   - `autoMailDeleteEmpty` (bool, default: true) — Auto-delete mail that has no items, money, or COD (just text) after collection
 
+### Auto-Deposit Reagents
+- Listens for `BANKFRAME_OPENED` event
+- Automatically deposits reagent items into the bank when opened
+- Tries `C_Bank.AutoDepositItemsIntoBank(Enum.BankType.Account)` first, falls back to `DepositReagentBank()`
+- Uses 0.3s delay for bank UI to load, wrapped in pcall
+- **Options (WaffleOptionsDB keys):**
+  - `autoDepositReagents` (bool, default: false) — Master toggle for auto-depositing reagents
+  - `autoDepositReagentsChat` (bool, default: true) — Whether to print deposit message to chat
+
+### Auto-Deposit Warbank
+- Shares `BANKFRAME_OPENED` event with reagent deposit
+- Only triggers when Warband Bank is open (checks `Enum.BankType.Account`)
+- Scans bags, checks item classID via `C_Item.GetItemInfo()`, moves matching items via `C_Container.UseContainerItem()`
+- Configurable by item category
+- Uses 0.5s delay, wrapped in pcall
+- **Options (WaffleOptionsDB keys):**
+  - `autoWarbankEnabled` (bool, default: false) — Master toggle for auto-deposit to Warband Bank
+  - `autoWarbankReagents` (bool, default: true) — Deposit reagents
+  - `autoWarbankConsumables` (bool, default: false) — Deposit consumables
+  - `autoWarbankTradeGoods` (bool, default: true) — Deposit trade goods
+  - `autoWarbankEquipment` (bool, default: false) — Deposit equipment (weapons + armor)
+  - `autoWarbankQuestItems` (bool, default: false) — Deposit quest items
+  - `autoWarbankChat` (bool, default: true) — Show deposit summary in chat
+
 ### Auto-Summon
 - Listens for `CONFIRM_SUMMON` event
 - Auto-accepts summons when enabled via `C_SummonInfo.ConfirmSummon()`
@@ -109,6 +133,23 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `autoPartyEnabled` (bool, default: false) — Master toggle for auto-accepting party invites
   - `autoPartyFriends` (bool, default: true) — Accept from friends
   - `autoPartyGuild` (bool, default: true) — Accept from guildmates
+
+### Auto-Decline Duels
+- Listens for `DUEL_REQUESTED` event (arg1 = challenger name)
+- Auto-declines via `CancelDuel()` (pcall) and hides the duel popup
+- Reuses `IsPlayerFriend()` and `IsPlayerGuildmate()` for allow-list checks
+- **Options (WaffleOptionsDB keys):**
+  - `autoDuelDecline` (bool, default: false) — Master toggle for auto-declining duels
+  - `autoDuelAllowFriends` (bool, default: true) — Allow duels from friends
+  - `autoDuelAllowGuild` (bool, default: true) — Allow duels from guildmates
+
+### Auto-Decline Guild Invites
+- Listens for `GUILD_INVITE_REQUEST` event (arg1 = inviterName, arg2 = guildName)
+- Auto-declines via `DeclineGuild()` (pcall) and hides the guild invite popup
+- Reuses `IsPlayerFriend()` for allow-list check
+- **Options (WaffleOptionsDB keys):**
+  - `autoGuildDecline` (bool, default: false) — Master toggle for auto-declining guild invites
+  - `autoGuildAllowFriends` (bool, default: true) — Allow invites from friends
 
 ### Auto-Release Spirit
 - Listens for `PLAYER_DEAD` event
@@ -167,7 +208,7 @@ WoW 12.0.1 retail addon that provides gameplay automations.
 - **Key Result:** On `CHALLENGE_MODE_COMPLETED`, checks `C_MythicPlus.GetOwnedKeystoneLevel()` and `C_ChallengeMode.GetCompletionInfo()` after 2s delay. Reports key upgrade or depletion with optional alert sound.
 - **Completion Message:** `CHALLENGE_MODE_COMPLETED` (M+), `LFG_COMPLETION_REWARD` (regular dungeons), and `ENCOUNTER_END` (raid boss kills, filtered to success=1 and instanceType="raid"). Sends customizable message to group chat via `GetGroupChatChannel()` with configurable delay via `C_Timer.After`.
 - **Auto-Leave Instance:** On M+ or regular dungeon completion (reuses existing events), starts a cancellable countdown then calls `LeaveParty()` via pcall. Cancel with `/wafflecancel`.
-- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `IsInMythicDungeon()` or `IsInRaidInstance()` based on user toggles. Shows current spec via `GetSpecializationInfo()`. Optionally shows active loadout name via `C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional alert sound. Logic extracted into `RunSpecAndTalentCheck()` for reuse by `/waffletest`. Separately toggleable for dungeons and raids.
+- **Spec/Talent Reminder:** `ZONE_CHANGED_NEW_AREA` → checks `IsInMythicDungeon()` or `IsInRaidInstance()` based on user toggles. Shows current spec via `GetSpecializationInfo()`. Optionally shows active loadout name via `C_ClassTalents.GetActiveConfigID()` + `C_Traits.GetConfigInfo()`. Checks unspent talent points via `C_Traits.GetTreeCurrencyInfo()`. Optional alert sound. Logic extracted into `RunSpecAndTalentCheck()`. Separately toggleable for dungeons and raids.
 - **Loot Spec Warning:** Integrated into `RunSpecAndTalentCheck()`. Uses `GetLootSpecialization()` (returns 0 if matching active spec). Warns if loot spec differs from active spec with optional alert sound.
 - **Ready Check Buffs:** `READY_CHECK` event. Scans all group members' buffs via `C_UnitAuras.GetBuffDataByIndex()`. Checks each member for class buffs (Intellect 1459, Fortitude 21562, Battle Shout 6673, MotW 1126, Bronze 381748), food (Well Fed aura name match), flask (Phial/Flask aura name match). Reports missing buffs per player. Separately toggleable for dungeons, raids, and open world parties. Personal or group chat mode.
 - **Role Check Auto-Accept:** Listens for `LFG_ROLE_CHECK_SHOW`, calls `CompleteLFGRoleCheck(true)` via pcall. Auto-confirms with current role.
@@ -220,11 +261,14 @@ WoW 12.0.1 retail addon that provides gameplay automations.
   - `dungeonInterruptAnnounce` (bool, default: false) — Announce player interrupts
   - `dungeonInterruptMsg` (string, default: "Interrupted with {spell}!") — Customizable interrupt message
   - `dungeonInterruptChannel` (string, default: "group") — Channel for interrupt announcements
+  - `dungeonDispelAnnounce` (bool, default: false) — Announce player dispels/purges
+  - `dungeonDispelMsg` (string, default: "Dispelled with {spell}!") — Customizable dispel message
+  - `dungeonDispelChannel` (string, default: "group") — Channel for dispel announcements
 
 ## Slash Commands
 
 - `/waffle` — Opens the options panel
-- `/waffletest` — Triggers spec/talent/loot-spec checks regardless of location (for testing)
+
 - `/wafflecancel` — Cancels auto-leave countdown
 
 ## WoW 12.0 API Restrictions
